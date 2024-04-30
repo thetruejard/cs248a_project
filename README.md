@@ -10,13 +10,13 @@ I am going to implement a real-time 3D render pipeline with emphasis on support 
 
 ## Background
 
-In real-time rendering applications, often the biggest bottleneck in shaders is dynamic lighting computations. A naive implementation could iterate over every light source in the pixel shader, but this grows linearly with the number of light sources in the scene, and when the number of light sources exceeds the memory accessible to the GPU, lights may need to be rendered in multiple passes. More sophisticated approaches attempt to mitigate this by removing redundancy and unnecessary lighting computations, such as when light sources are negigible at a pixel due to suffiicent attenuation, or when pixels will be occluded by other geometry later in the render pipeline. This project will target one of two approaches, depending on feasibility determined during implementation:
+In real-time rendering applications, often the biggest bottleneck in shaders is dynamic lighting computations. A naive implementation could iterate over every light source in the pixel shader, but this grows linearly with the number of light sources in the scene, and when the number of light sources exceeds the memory accessible to the GPU, lights may need to be rendered in multiple passes. More sophisticated approaches attempt to mitigate this by removing redundant and unnecessary lighting computations, such as when light sources are negligible at a pixel due to sufficient attenuation, or when pixels will be occluded by other geometry later in the render pipeline. This project will target one of two approaches, depending on feasibility determined during implementation:
 
-- Clustered Forward+ Rendering: Based on the original [Forward+](https://takahiroharada.wordpress.com/wp-content/uploads/2015/04/forward_plus.pdf) method and [clustered](https://www.cse.chalmers.se/~uffe/clustered_shading_preprint.pdf) methods, Clusterd Forward+ Rendering subdivides the scene into 3D screen-space tiles ("screen-space" meaning they are aligned to the camera's frustum), and only computes a light source in tiles which the light source significantly influences. To my understanding, methods in this family are typically preferred in modern rendering pipelines,
+- Clustered Forward+ Rendering: Based on the original [Forward+](https://takahiroharada.wordpress.com/wp-content/uploads/2015/04/forward_plus.pdf) method and [clustered](https://www.cse.chalmers.se/~uffe/clustered_shading_preprint.pdf) methods, Clustered Forward+ Rendering subdivides the scene into 3D screen-space tiles ("screen-space" meaning they are aligned to the camera's frustum), and only computes a light source in tiles which the light source significantly influences. To my understanding, methods in this family are typically preferred in modern rendering pipelines.
 
 - [Deferred Rendering](https://www.researchgate.net/profile/Jonathan_Thaler2/publication/323357208_Deferred_Rendering/links/5a8fce31aca272140560aaad/Deferred-Rendering.pdf): Deferred rendering processes occlusions first by rendering the entire scene to a "G-buffer", containing colors/normals/etc. for each pixel, then renders all lights afterwards. Although very effective, this method has high memory overhead, can make antialiasing difficult, and typically has limited (if any) support for transparent objects in the deferred pass.
 
-**In this project,** I will prioritize Clustered Forward+ Rendering, but due to its (geometric) complexity, I *may* fall back to Deferred Rendering if I deem it necessary (see "Risks" section below). Note that this project only focuses on dynamic light sources, not static lights (which would often be baked into unchanging light/shadow maps.)
+**In this project,** I will prioritize Clustered Forward+ Rendering, but due to its (geometric) complexity, I *may* fall back to Deferred Rendering (see "Risks" section below). Note that this project only focuses on dynamic light sources, not static lights (which would often be baked into unchanging light/shadow maps.)
 
 **Extension:** Note that shadows are a separate feature that is somewhat detached from the pipeline architecture defined above. I will work on shadow rendering if I have time, but it is not a priority.
 
@@ -47,7 +47,7 @@ Outputs:
 
 ## Risks & Help
 
-The biggest risk is if I fail to can't manage to perfect the clustering process due to the complex computational geometry problems. For this reason, I propose Deferred Rendering as a fallback architecture that should be significantly easier to implement. I shouldn't need any special compute resources, but I may reach out to course staff to ask for suggested readings.
+The biggest risk is if I can't manage to perfect the clustering process due to the complex computational geometry problems involved. For this reason, I propose Deferred Rendering as a fallback architecture that should be easier to implement. I shouldn't need any special compute resources, but I may reach out to course staff to ask for suggested readings.
 
 # Technical Specs
 
