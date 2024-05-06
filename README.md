@@ -61,3 +61,51 @@ The biggest risk is if I can't manage to perfect the clustering process due to t
 - [GLFW](https://github.com/glfw/glfw)
 - [GLM](https://github.com/g-truc/glm)
 - [stb_image.h](https://github.com/nothings/stb/blob/master/stb_image.h)
+
+---
+
+# Render Engine
+
+![Night-time demo scene](docs/demo1.jpg)
+*House model from [TurboSquid](https://www.turbosquid.com/3d-models/simple-house-with-interior-model-1747451)*
+
+This render engine is a high-level abstraction that lets the user create a bare-bones description of the scene using references to on-disk asset files. If desired, the user can create the scene entirely in dedicated software and load it as a single asset. For example, the demo scene above can be created with just a few lines:
+
+```cpp
+RenderEngine engine;
+
+int main(int argc, char* argv[]) {
+
+    Ref<Scene> scene = engine.createScene();
+    engine.setActiveScene(scene);
+    scene->backgroundColor = glm::vec3(0.05f, 0.06f, 0.1f);
+
+    Ref<GameObject> house = Assets::importObject(engine, "./samples/assets/house/house.gltf");
+    scene->addObject(house);
+
+    // Boilerplate: create a controllable camera
+    Ref<GO_Camera> camera = engine.createObject<GO_Camera>();
+    scene->addObject(camera);
+    camera->setPerspective(glm::radians(70.0f), 1280.0f / 720.0f, 0.1f, 100.0f);
+    camera->addComponent<Motion>();
+    camera->addComponent<KeyboardController>();
+    camera->addComponent<MouseRotation>();
+    camera->addComponent<ApplyMotion>();
+
+    engine.launch("House Demo", 1280, 720, false);
+    return 0;
+}
+```
+
+The engine also offers the user freedom to modify any element of the scene graph. For example, the following snippet dims all the light sources in the "house" asset by a factor of `0.1` by running a recursive lambda over its children:
+
+```cpp
+std::function<void(Ref<GameObject>)> dim_the_lights = [&dim_the_lights](Ref<GameObject> root) {
+    if (GO_Light* light = root.cast<GO_Light>())
+        light->color *= 0.1f;
+    for (auto child : root->getChildren())
+        dim_the_lights(child);
+};
+dim_the_lights(house);
+```
+
