@@ -117,7 +117,7 @@ void RP_Deferred_OpenGL::resizeFramebuffer(size_t width, size_t height) {
 	glBindFramebuffer(GL_FRAMEBUFFER, this->preGammaFBO);
 	glGenTextures(1, &this->preGammaTex);
 	glBindTexture(GL_TEXTURE_2D, this->preGammaTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, this->width, this->height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, this->width, this->height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this->preGammaTex, 0);

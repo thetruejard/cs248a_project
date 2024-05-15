@@ -87,6 +87,12 @@ static Ref<Texture> processTexture(importObject_Context& context, std::string te
     }
     else {
         // Load from a file.
+        std::string::size_type n = 0;
+        while ((n = texturePath.find("%20", n)) != std::string::npos)
+        {
+            texturePath.replace(n, 3, " ");
+            n += 1;
+        }
         return Assets::importTexture(*context.engine, context.directory / texturePath);
     }
 }

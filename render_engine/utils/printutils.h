@@ -12,6 +12,7 @@ namespace Utils {
 
 		void objectTree(GameObject* root);
 
+		void vec3(const glm::vec3& v);
 		void mat4(const glm::mat4& mat);
 
 	}

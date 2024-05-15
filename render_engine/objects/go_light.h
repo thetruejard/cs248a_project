@@ -20,7 +20,7 @@ public:
 
 
 	// The type of light.
-	Type type;
+	Type type = Type::Point;
 
 	// Directional, Spot
 	glm::vec3 direction;
@@ -28,10 +28,10 @@ public:
 	glm::vec2 innerOuterAngles;
 
 	// Color (may not be clamped).
-	glm::vec3 color;
+	glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f);
 
 	// Attenuation parameters: (constant, linear, quadratic).
-	glm::vec3 attenuation;
+	glm::vec3 attenuation = glm::vec3(0.0f, 0.0f, 2.0f);
 
 
 	glm::vec3 getWorldSpaceDirection();

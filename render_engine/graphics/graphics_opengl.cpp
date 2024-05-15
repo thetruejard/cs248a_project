@@ -127,7 +127,7 @@ bool Graphics_OpenGL::createWindow(
 	glfwMakeContextCurrent(this->window);
 
 	// TODO: Make VSync into a setting.
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 
 	glfwShowWindow(this->window);
 
