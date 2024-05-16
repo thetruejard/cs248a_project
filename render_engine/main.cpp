@@ -1,145 +1,175 @@
+#if true
 
-/*
+#include "assets/assets.h"
+#include "components/motion.h"
+#include "components/keyboardcontroller.h"
+#include "components/mouserotation.h"
+#include "core/renderengine.h"
+#include "geometry/sphere.h"
+#include "objects/go_camera.h"
+#include "objects/go_mesh.h"
+#include "utils/printutils.h"
+
+#include "nlohmann/json.hpp"
+using json = nlohmann::json;
+
+
 #include <iostream>
-#include <thread>
-
-#include "GLFW/glfw3.h"
-#include "GLFW/glfw3native.h"
-
-#include "glm/glm.hpp"
+#include <vector>
+#include <string>
+#include <fstream>
 
 
-#include "core/RenderEngine.h"
-#include "core/Scene.h"
-#include "assets/Assets.h"
+RenderEngine engine;
 
 
-void setupGLFW() {
+void setupDemoScene(Scene* scene) {
 
-    // Initialize GLFW. Most GLFW functions will not work before doing this.
-    if (!glfwInit())
-        throw -1;
+    scene->backgroundColor = 0.1f * glm::vec3(0.5f, 0.6f, 1.0f);
 
-    // Configure GLFW
-    glfwDefaultWindowHints(); // optional, the current window hints are already the default
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // the window will stay hidden after creation
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); // the window will be resizable
+    std::cout << "Loading scene\n";
+    Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/ian/ian.gltf");
+    if (!object) {
+        std::cout << "Failed to load scene\n";
+        exit(0);
+    }
+    std::cout << "Done loading scene\n";
+    scene->addObject(object);
 
-    // Create the window
-    GLFWwindow* window = glfwCreateWindow(300, 300, "Hello World!", NULL, NULL);
-    if (window == NULL)
-        throw -2;
 
-    // Setup a key callback. It will be called every time a key is pressed, repeated or released.
-    //glfwSetKeyCallback(window, (window, key, scancode, action, mods) -> {
-    //    if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE)
-    //        glfwSetWindowShouldClose(window, true); // We will detect this in the rendering loop
-    //});
+    // Prepare the camera & controls.
+    Ref<GameObject> controller = engine.createObject<GameObject>();
+    controller->addComponent<Motion>();
+    controller->addComponent<KeyboardController>();
+    controller->addComponent<MouseRotation>();
+    controller->addComponent<ApplyMotion>();
 
-    int width = 0;
-    int height = 0;
-    glfwGetWindowSize(window, &width, &height);
+    // Make the camera appear third-person-ish by moving it backwards relative to the controller.
+    Ref<GO_Camera> camera = engine.createObject<GO_Camera>();
+    camera->setPosition(0.0f, 0.0f, 3.0f);
+    camera->setPerspective(glm::radians(70.0f), 1280.0f / 720.0f, 0.1f, 100.0f);
+    camera->setParent(controller, false);
+    scene->addObject(controller);
+    scene->setActiveCamera(camera);
 
-        // Get the resolution of the primary monitor
-    const GLFWvidmode* vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
 
-        // Center the window
-    glfwSetWindowPos(
-        window,
-        (vidmode->width - width) / 2,
-        (vidmode->height - height) / 2
-    );
+    std::cout << "Dimming the lights\n";
+    // Dim the lights, since blender exports them super bright.
+    // Also give random colors, just for fun.
+    auto random = []() { return float(rand()) / float(RAND_MAX); };
+    std::function<void(Ref<GameObject>)> dim_the_lights = [&dim_the_lights, &random](Ref<GameObject> root) {
+        if (root->getTypeName() == "Light") {
+            constexpr float brightness = 0.0001f;
+            auto L = root.cast<GO_Light>();
+            L->color *= brightness;
+            if (L->type == GO_Light::Type::Directional) {
+                L->color *= 0.0f;
+            }
+            std::cout << "LIGHT: " << root->getName() << " | ";
+            Utils::Print::vec3(root.cast<GO_Light>()->color);
+        }
+        for (auto child : root->getChildren()) {
+            dim_the_lights(child);
+        }
+    };
+    dim_the_lights(object);
 
-    // Make the OpenGL context current
-    glfwMakeContextCurrent(window);
-    // Enable v-sync
-    glfwSwapInterval(1);
 
-    // Make the window visible
-    glfwShowWindow(window);
-    //glfwSetWindowSizeCallback(window, (long window, int w, int h) -> {
-    //    glViewport(0, 0, w, h);
-    //    perspective = new Matrix4f().perspective(20.0f, (float)w / h, 0.01f, 100.0f);
-    //});
+    size_t num_lights = 50;
+    Ref<Mesh> sphere = engine.createMesh();
+    Sphere(0.1f).toMesh(sphere, 12, 8);
+    sphere->uploadMesh();
+    for (size_t i = 0; i < num_lights; i++) {
+        Ref<GO_Light> light = engine.createObject<GO_Light>();
+        Ref<GO_Mesh> mesh = engine.createObject<GO_Mesh>();
+        mesh->assignMesh(sphere);
+        mesh->setParent(light, false);
+        glm::vec3 pos = glm::vec3(20.0f * (2.0f * random() - 1.0f), 10.0f * random(), 20.0f * (2.0f * random() - 1.0f));
+        light->setPosition(pos);
+        glm::vec3 color = glm::normalize(glm::vec3(random(), random(), random()));
+        light->color = 0.5f * color;
+        scene->addObject(light);
+    }
 
-    //glfwSetKeyCallback(window, (long window, int key, int scancode, int action, int mods) -> {
-    //    if (key < 512) {
-    //        if (action == GLFW_PRESS)
-    //            keys[key] = true;
-    //        else if (action == GLFW_RELEASE)
-    //            keys[key] = false;
-    //
-    //        if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE) {
-    //            if (GLFW_CURSOR_DISABLED == glfwGetInputMode(window, GLFW_CURSOR))
-    //                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    //            else
-    //                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    //        }
-    //    }
-    //});
-    //
-    //glfwSetCursorPosCallback(window, (long window, double xpos, double ypos) -> {
-    //    float rotspeed = 0.002f;
-    //    if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
-    //        Vector2f delta = new Vector2f((float)(px - xpos), (float)(py - ypos));
-    //        yawpitch.add(delta.mul(rotspeed));
-    //        if (yawpitch.x < 0.0f)
-    //            yawpitch.x += 2.0f * (float)Math.PI;
-    //        else if (yawpitch.x >= 2.0f * (float)Math.PI)
-    //            yawpitch.x -= 2.0f * (float)Math.PI;
-    //        yawpitch.y = Math.max((float)Math.PI * -0.49f, Math.min((float)Math.PI * 0.49f, yawpitch.y));
-    //        px = xpos;
-    //        py = ypos;
-    //    }
-    //});
-    //
-    //glfwSetCharCallback(window, (long window, int codepoint) -> {
-    //    char[] ch = Character.toChars(codepoint);
-    //    String str = new String(ch);
-    //    //System.out.println(str);
-    //});
 
-    if (glfwRawMouseMotionSupported())
-        glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
+    std::cout << "Scene graph:\n";
+    Utils::Print::objectTree(scene->getRoot().get());
 
 }
 
-*/
-
-/*
-* main.cpp - A test environment for development purposes.
-* A distribution of the game engine will *not* include this file; rather,
-* it will be a statically linked library for use in other projects.
-*/
-
-/*
-int _main(int argc, char* argv[]) {
-
-    // If we don't use the "new" keyword in C++, the class by default has the same
-    // scope as a primitive type like "int".
-    // There's no such thing as a null class in C++, but there are null pointers
-    // (pointers to memory address 0), which is what Java uses under the hood.
-    RenderEngine engine;
-
-    // Make a scene from scratch. In the future, we should be able to load in scenes
-    // from asset files, likely either COLLADA or glTF (or some custom meta format).
-    Scene scene(engine);
-    
-    // TODO
-    //scene.setSkybox(Assets::importSkybox(engine, "path/to/skybox.png"));
-
-    GameObjectID object = Assets::importObject(engine, "path/to/object.obj");
-    scene.addObject(object);
-    scene.addObject(Assets::importObject(engine, "path/to/object2.obj"));
-
-    engine.setActiveScene(scene.getID());
-    engine.launch(1280, 720, false);
-
-    
-
-	return 0;
+void argsError() {
+    std::cout << "Args error\n";
+    exit(1);
 }
 
-*/
+int main(int argc, char* argv[]) {
+
+    RenderPipelineType pipeline = RenderPipelineType::Deferred;
+    std::string pipeline_name = "deferred-none";
+    size_t lights = 100;
+
+    // Parse arguments
+    std::vector<std::string> args;
+    args.reserve(argc);
+    for (int i = 1; i < argc; i++) {
+        args.push_back(argv[i]);
+    }
+    for (int i = 0; i < args.size(); i++) {
+        if (args[i] == "--lights") {
+            if (i == args.size()-1)
+                argsError();
+            lights = std::stoi(args[++i]);
+        }
+        else if (args[i] == "--pipeline") {
+            if (++i == args.size())
+                argsError();
+            if (args[i] == "deferred-none")
+                pipeline = RenderPipelineType::Deferred;
+            else if (args[i] == "deferred-sphere")
+                pipeline = RenderPipelineType::Deferred;
+            else if (args[i] == "forward-none")
+                pipeline = RenderPipelineType::Deferred;
+            else if (args[i] == "forward-tile")
+                pipeline = RenderPipelineType::Deferred;
+            else if (args[i] == "forward-cluster")
+                pipeline = RenderPipelineType::Deferred;
+            else argsError();
+            pipeline_name = args[i];
+        }
+        else {
+            argsError();
+        }
+    }
+
+    std::cout << "lights: " << lights << "\n";
+    std::cout << "pipeline: " << pipeline_name << "\n";
+
+
+    engine.getGraphics()->setRenderPipeline(pipeline);
+    Ref<Scene> scene = engine.createScene();
+    setupDemoScene(scene.get());
+    engine.setActiveScene(scene);
+
+
+    // Load camera path
+    std::ifstream campath_file("samples/assets/ian/cam_trajectory.json");
+    json campath = json::parse(campath_file);
+    std::vector<float> cam_mats;
+    size_t num_cam_mats = campath.size();
+    cam_mats.reserve(16 * campath.size());
+    for (int i = 0; i < campath.size(); i++) {
+        auto& m = campath[i];
+        if (m.size() != 16) {
+            std::cout << "TRAJECTORY MATRIX SIZE NOT 16\n";
+            exit(1);
+        }
+        cam_mats.insert(cam_mats.end(), m.begin(), m.end());
+    }
+
+    engine.launch_eval("Eval", 1280, 720, true, (glm::mat4*)cam_mats.data(), num_cam_mats);
+
+    return 0;
+}
+
+
+#endif

@@ -2,6 +2,7 @@
 #include "graphics/pipeline/rp_clay_opengl.h"
 #include "graphics/pipeline/rp_temp_opengl.h"
 #include "graphics/pipeline/rp_deferred_opengl.h"
+#include "io/callbacks_glfw.h"
 
 #include <sstream>
 #include <fstream>
@@ -130,6 +131,15 @@ bool Graphics_OpenGL::createWindow(
 	glfwSwapInterval(0);
 
 	glfwShowWindow(this->window);
+	if (fullscreen) {
+		glfwSetWindowMonitor(
+			this->window, glfwGetPrimaryMonitor(),
+			0, 0, vidmode->width, vidmode->height, GLFW_DONT_CARE
+		);
+	}
+
+	glfwGetFramebufferSize(this->window, &fwidth, &fheight);
+	this->resizeFramebuffer((size_t)fwidth, (size_t)fheight);
 
 	return false;
 }

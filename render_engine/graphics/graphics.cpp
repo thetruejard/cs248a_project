@@ -77,6 +77,19 @@ GLFWwindow* Graphics::getWindow() {
 	return this->window;
 }
 
+// TODO: Cache?
+size_t Graphics::getWidth() {
+	int w, h;
+	glfwGetFramebufferSize(this->window, &w, &h);
+	return (size_t)w;
+}
+
+size_t Graphics::getHeight() {
+	int w, h;
+	glfwGetFramebufferSize(this->window, &w, &h);
+	return (size_t)h;
+}
+
 void Graphics::render(Scene* scene) {
 	if (this->pipeline) {
 		this->pipeline->render(scene);

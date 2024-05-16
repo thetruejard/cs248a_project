@@ -109,6 +109,9 @@ public:
 	*/
 	GLFWwindow* getWindow();
 
+	size_t getWidth();
+	size_t getHeight();
+
 	/*
 	* Polls events from the window and delegates them to event callbacks in the engine.
 	* Returns false when the main event loop should end, e.g. the red X is clicked.

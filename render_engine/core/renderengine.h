@@ -44,6 +44,15 @@ public:
 		bool fullscreen
 	);
 
+	void launch_eval(
+		std::string windowTitle,
+		size_t width,
+		size_t height,
+		bool fullscreen,
+		glm::mat4* camMats,
+		size_t numCamMats
+	);
+
 	Graphics* getGraphics();
 	InputContext* getInputContext();
 

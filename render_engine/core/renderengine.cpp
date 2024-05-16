@@ -87,6 +87,60 @@ void RenderEngine::launch(
 }
 
 
+void RenderEngine::launch_eval(
+	std::string windowTitle,
+	size_t width,
+	size_t height,
+	bool fullscreen,
+	glm::mat4* camMats,
+	size_t numCamMats
+) {
+
+	if (this->graphics == nullptr) {
+		return;
+	}
+
+	this->windowTitle = windowTitle;
+	this->graphics->createWindow(this->windowTitle, width, height, fullscreen);
+	if (glfwRawMouseMotionSupported()) {
+		glfwSetInputMode(this->graphics->getWindow(), GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+	}
+	Callbacks_GLFW::registerWindow(this->graphics->getWindow(), this);
+	if (this->activeScene && this->activeScene->getActiveCamera()) {
+		this->activeScene->getActiveCamera()->setAspect(
+			this->graphics->getWidth() / (float)this->graphics->getHeight()
+		);
+	}
+
+	auto lasttime = std::chrono::high_resolution_clock::now();
+
+	bool done = false;
+	for (size_t viewIdx = 0; !done && viewIdx < numCamMats; viewIdx++) {
+		auto now = std::chrono::high_resolution_clock::now();
+		auto diff = now - lasttime;
+		lasttime = now;
+		double deltaTime = diff.count() / 1000000000.0;
+
+		this->depsgraph.resolveGraph();
+		if (this->activeScene) {
+			this->activeScene->evaluateComponents((float)deltaTime);
+
+			if (GO_Camera* cam = this->activeScene->getActiveCamera().get()) {
+				cam->setLocalMatrix(camMats[viewIdx]);
+			}
+		}
+
+		// TODO (in the long run): Consider double buffering this data, if feasible.
+		this->graphics->render(this->activeScene.get());
+		done = !this->graphics->pollEvents() || done;
+	}
+
+	Callbacks_GLFW::unregisterWindow(this->graphics->getWindow());
+	this->graphics->destroyWindow();
+
+}
+
+
 Graphics* RenderEngine::getGraphics() {
 	return this->graphics;
 }
