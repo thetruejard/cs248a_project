@@ -32,6 +32,7 @@ private:
 	GLuint gbAlbedoTex = 0;
 	GLuint gbPosTex = 0;
 	GLuint gbNormalTex = 0;
+	GLuint gbMetalRoughTex = 0;
 	GLuint gbDepthRB = 0;
 
 	// TEMP while waiting for gamma solution.

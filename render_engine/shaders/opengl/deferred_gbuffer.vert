@@ -22,6 +22,7 @@ out attribs {
 	vec3 tangent;
 	vec3 bitangent;
 	vec2 uv;
+	mat3 TBN;
 } vs_out;
 
 
@@ -31,5 +32,12 @@ void main() {
 	vs_out.tangent = normalize((normalMat * vec4(tangent, 0.0)).xyz);
 	vs_out.bitangent = normalize((normalMat * vec4(bitangent, 0.0)).xyz);
 	vs_out.uv = uv;
+
+	// Tangent matrix.
+	vec3 T = normalize(vec3(normalMat * vec4(tangent, 0.0)));
+	vec3 B = normalize(vec3(normalMat * vec4(bitangent, 0.0)));
+	vec3 N = normalize(vec3(normalMat * vec4(normal, 0.0)));
+	vs_out.TBN = mat3(T, B, N);
+
 	gl_Position = mvpMat * vec4(position, 1.0);
 }

@@ -7,6 +7,7 @@ layout (location = 0) out vec4 outColor;
 uniform sampler2D texturePos;
 uniform sampler2D textureNormals;
 uniform sampler2D textureAlbedo;
+uniform sampler2D textureMetalRough;
 
 
 // Light parameters.
@@ -45,11 +46,13 @@ in attribs {
 
 
 
-vec3 computeLight(
+vec3 computeLightFromDir(
 	vec3 dirToLight,	// normalized direction
 	vec3 dirToCamera,	// normalized direction
 	vec3 lightColor,	// color scaled by intensity
 	vec3 baseColor,		// base color of the surface
+	float metalness,	// metalness of the surface
+	float roughness,	// roughness of the surface
 	vec3 normal			// normal of surface
 ) {
 	// TODO: Consider replacing with PBR rendering.
@@ -73,18 +76,18 @@ float computeAttenuation(float dist, vec3 attenuation) {
 }
 
 
-void main() {
-
+vec3 processLight(
+	Light light,		// the light to process
+	vec3 position,		// position of the fragment
+	vec3 baseColor,		// base color of the surface
+	float metalness,	// metalness of the surface
+	float roughness,	// roughness of the surface
+	vec3 normal			// normal of surface
+) {
 	float type = round(light.positionType.w);
 	if (type == 0.0) {
-		outColor = vec4(0.0, 0.0, 0.0, 1.0);
-		return;
+		return vec3(0.0);
 	}
-
-	vec2 uv = vec2(fs_in.position.x, fs_in.position.y) * 0.5 + 0.5;
-	vec3 position = texture(texturePos, fs_in.uv).xyz;
-	vec3 normal = texture(textureNormals, fs_in.uv).xyz;
-	vec3 albedo = texture(textureAlbedo, fs_in.uv).rgb;
 
 	vec3 dirToLight;
 	vec3 lightColor = light.color;
@@ -103,11 +106,35 @@ void main() {
 		// Spot.
 	}
 
-	outColor = vec4(computeLight(
+	return computeLightFromDir(
 		dirToLight,
 		-normalize(position),
 		lightColor,
+		baseColor,
+		metalness,
+		roughness,
+		normal
+	);
+}
+
+
+
+
+
+void main() {
+
+	vec2 uv = vec2(fs_in.position.x, fs_in.position.y) * 0.5 + 0.5;
+	vec3 position = texture(texturePos, fs_in.uv).xyz;
+	vec3 albedo = texture(textureAlbedo, fs_in.uv).rgb;
+	vec2 metalRough = texture(textureMetalRough, fs_in.uv).xy;
+	vec3 normal = texture(textureNormals, fs_in.uv).xyz;
+
+	outColor = vec4(processLight(
+		light,
+		position,
 		albedo,
+		metalRough.x,
+		metalRough.y,
 		normal
 	), 1.0);
 

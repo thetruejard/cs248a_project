@@ -28,7 +28,7 @@ void setupDemoScene(Scene* scene) {
     scene->backgroundColor = 0.1f * glm::vec3(0.5f, 0.6f, 1.0f);
 
     std::cout << "Loading scene\n";
-    Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/ian/ian.gltf");
+    Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/Sponza/Sponza_smol.gltf");
     if (!object) {
         std::cout << "Failed to load scene\n";
         exit(0);
@@ -46,7 +46,7 @@ void setupDemoScene(Scene* scene) {
 
     // Make the camera appear third-person-ish by moving it backwards relative to the controller.
     Ref<GO_Camera> camera = engine.createObject<GO_Camera>();
-    camera->setPosition(0.0f, 0.0f, 3.0f);
+    camera->setPosition(0.0f, 0.0f, 1.0f);
     camera->setPerspective(glm::radians(70.0f), 1280.0f / 720.0f, 0.1f, 100.0f);
     camera->setParent(controller, false);
     scene->addObject(controller);
@@ -108,6 +108,7 @@ int main(int argc, char* argv[]) {
     std::string pipeline_name = "deferred-none";
     size_t lights = 100;
     std::filesystem::path log_file;
+    bool interactive = false;
 
     // Parse arguments
     std::vector<std::string> args;
@@ -142,6 +143,9 @@ int main(int argc, char* argv[]) {
                 argsError();
             log_file = args[i];
         }
+        else if (args[i] == "--interactive" || args[i] == "-I") {
+            interactive = true;
+        }
         else {
             argsError();
         }
@@ -156,30 +160,34 @@ int main(int argc, char* argv[]) {
     setupDemoScene(scene.get());
     engine.setActiveScene(scene);
 
-
-    // Load camera path
-    std::ifstream campath_file("samples/assets/ian/cam_trajectory.json");
-    json campath = json::parse(campath_file);
-    std::vector<float> cam_mats;
-    size_t num_cam_mats = campath.size();
-    cam_mats.reserve(16 * campath.size());
-    for (int i = 0; i < campath.size(); i++) {
-        auto& m = campath[i];
-        if (m.size() != 16) {
-            std::cout << "TRAJECTORY MATRIX SIZE NOT 16\n";
-            exit(1);
+    if (interactive) {
+        engine.launch("test", 1920, 1080, false);
+    }
+    else {
+        // Load camera path
+        std::ifstream campath_file("samples/assets/ian/cam_trajectory.json");
+        json campath = json::parse(campath_file);
+        std::vector<float> cam_mats;
+        size_t num_cam_mats = campath.size();
+        cam_mats.reserve(16 * campath.size());
+        for (int i = 0; i < campath.size(); i++) {
+            auto& m = campath[i];
+            if (m.size() != 16) {
+                std::cout << "TRAJECTORY MATRIX SIZE NOT 16\n";
+                exit(1);
+            }
+            cam_mats.insert(cam_mats.end(), m.begin(), m.end());
         }
-        cam_mats.insert(cam_mats.end(), m.begin(), m.end());
+
+        json result = engine.launch_eval("Eval", 1280, 720, false, (glm::mat4*)cam_mats.data(), num_cam_mats, !log_file.empty());
+
+        if (!log_file.empty()) {
+            std::ofstream log_out(log_file);
+            //    log_out << result.dump();
+        }
     }
 
-    engine.launch("test", 1920, 1080, false);
-    //json result = engine.launch_eval("Eval", 1280, 720, false, (glm::mat4*)cam_mats.data(), num_cam_mats, !log_file.empty());
-
-    if (!log_file.empty()) {
-        std::ofstream log_out(log_file);
-    //    log_out << result.dump();
-    }
-
+    
     return 0;
 }
 

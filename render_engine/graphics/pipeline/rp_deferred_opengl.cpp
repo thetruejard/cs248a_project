@@ -52,6 +52,9 @@ void RP_Deferred_OpenGL::resizeFramebuffer(size_t width, size_t height) {
 	if (glIsTexture(this->gbAlbedoTex)) {
 		glDeleteTextures(1, &this->gbAlbedoTex);
 	}
+	if (glIsTexture(this->gbMetalRoughTex)) {
+		glDeleteTextures(1, &this->gbMetalRoughTex);
+	}
 	if (glIsRenderbuffer(this->gbDepthRB)) {
 		glDeleteRenderbuffers(1, &this->gbDepthRB);
 	}
@@ -87,9 +90,17 @@ void RP_Deferred_OpenGL::resizeFramebuffer(size_t width, size_t height) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, this->gbAlbedoTex, 0);
 
-	// Tell OpenGL which color attachments we'll use  for rendering (specific to this framebuffer).
-	GLenum attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-	glDrawBuffers(3, attachments);
+	// Metalness/Roughness texture.
+	glGenTextures(1, &this->gbMetalRoughTex);
+	glBindTexture(GL_TEXTURE_2D, this->gbMetalRoughTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, this->width, this->height, 0, GL_RG, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, this->gbMetalRoughTex, 0);
+
+	// Tell OpenGL which color attachments we'll use for rendering (specific to this framebuffer).
+	GLenum attachments[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
+	glDrawBuffers(4, attachments);
 
 	// Create and attach the depth buffer.
 	glGenRenderbuffers(1, &this->gbDepthRB);
@@ -131,6 +142,7 @@ void RP_Deferred_OpenGL::resizeFramebuffer(size_t width, size_t height) {
 static void bindMaterial(Shader_OpenGL& shader, Ref<Material> material) {
 	// TODO: Support binding different types/more complex materials.
 	if (material) {
+		// Diffuse tex/color
 		shader.setUniform4f("colorDiffuse", material->getDiffuseColor());
 		if (material->getDiffuseTexture()) {
 			GPUTexture* gpuTex = material->getDiffuseTexture()->getGPUTexture();
@@ -139,6 +151,36 @@ static void bindMaterial(Shader_OpenGL& shader, Ref<Material> material) {
 				0, GL_TEXTURE_2D
 			);
 		}
+		// Metalness
+		shader.setUniform2f("metalnessFac", glm::vec2(material->getMetalness(),
+			1.0f-(float)bool(material->getMetalnessTexture())));
+		if (material->getMetalnessTexture()) {
+			GPUTexture* gpuTex = material->getMetalnessTexture()->getGPUTexture();
+			shader.setUniformTex("textureMetalness",
+				((GPUTexture_OpenGL*)gpuTex)->getGLTexID(),
+				0, GL_TEXTURE_2D
+			);
+		}
+		// Roughness
+		shader.setUniform2f("roughnessFac", glm::vec2(material->getRoughness(),
+			1.0f - (float)bool(material->getRoughnessTexture())));
+		if (material->getRoughnessTexture()) {
+			GPUTexture* gpuTex = material->getRoughnessTexture()->getGPUTexture();
+			shader.setUniformTex("textureRoughness",
+				((GPUTexture_OpenGL*)gpuTex)->getGLTexID(),
+				0, GL_TEXTURE_2D
+			);
+		}
+		// Normal
+		shader.setUniform1i("useNormalTex", (GLint)bool(material->getNormalTexture()));
+		if (material->getNormalTexture()) {
+			GPUTexture* gpuTex = material->getNormalTexture()->getGPUTexture();
+			shader.setUniformTex("textureNormal",
+				((GPUTexture_OpenGL*)gpuTex)->getGLTexID(),
+				0, GL_TEXTURE_2D
+			);
+		}
+
 		// TODO: TEMP
 		if (material->wireframe) {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -238,6 +280,7 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 	this->lightShader.setUniformTex("texturePos", this->gbPosTex, 0);
 	this->lightShader.setUniformTex("textureNormals", this->gbNormalTex, 1);
 	this->lightShader.setUniformTex("textureAlbedo", this->gbAlbedoTex, 2);
+	this->lightShader.setUniformTex("textureMetalRough", this->gbMetalRoughTex, 3);
 
 	for (GO_Light* light : scene->lights) {
 		glm::vec4 posVector = viewMatrix * light->getModelMatrix()[3];

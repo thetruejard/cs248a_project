@@ -108,22 +108,46 @@ static Ref<Material> processMaterial(importObject_Context& context, int material
     aiMaterial* in_material = context.scene->mMaterials[materialIdx];
     aiString tempStr;
     aiColor3D tempColor3;
+    float tempFloat;
 
     in_material->Get(AI_MATKEY_NAME, tempStr);
     material->setName(AssimpUtils::toStr(tempStr));
 
-    // TODO: Get other texture types, once Material supports it.
+    // Diffuse color.
     if (in_material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
         in_material->GetTexture(aiTextureType_DIFFUSE, 0, &tempStr);
-
         Ref<Texture> diffuseTexture = processTexture(context, AssimpUtils::toStr(tempStr));
         material->assignDiffuseTexture(diffuseTexture);
     }
-
     in_material->Get(AI_MATKEY_COLOR_DIFFUSE, tempColor3);
     material->assignDiffuseColor(glm::vec4(AssimpUtils::toVec3(tempColor3),
         material->getDiffuseTexture() ? 0.0f : 1.0f
     ));
+
+    // Metalness.
+    if (in_material->GetTextureCount(aiTextureType_METALNESS) > 0) {
+        in_material->GetTexture(aiTextureType_METALNESS, 0, &tempStr);
+        Ref<Texture> metalnessTexture = processTexture(context, AssimpUtils::toStr(tempStr));
+        material->assignMetalnessTexture(metalnessTexture);
+    }
+    in_material->Get(AI_MATKEY_METALLIC_FACTOR, tempFloat);
+    material->assignMetalness(tempFloat);
+
+    // Roughness.
+    if (in_material->GetTextureCount(aiTextureType_DIFFUSE_ROUGHNESS) > 0) {
+        in_material->GetTexture(aiTextureType_DIFFUSE_ROUGHNESS, 0, &tempStr);
+        Ref<Texture> roughnessTexture = processTexture(context, AssimpUtils::toStr(tempStr));
+        material->assignRoughnessTexture(roughnessTexture);
+    }
+    in_material->Get(AI_MATKEY_ROUGHNESS_FACTOR, tempFloat);
+    material->assignRoughness(tempFloat);
+
+    // Normal.
+    if (in_material->GetTextureCount(aiTextureType_NORMALS) > 0) {
+        in_material->GetTexture(aiTextureType_NORMALS, 0, &tempStr);
+        Ref<Texture> normalTexture = processTexture(context, AssimpUtils::toStr(tempStr));
+        material->assignNormalTexture(normalTexture);
+    }
 
     return material;
 }

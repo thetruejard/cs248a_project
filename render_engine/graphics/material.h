@@ -24,8 +24,25 @@ public:
 	void assignDiffuseTexture(const Ref<Texture>& texture);
 	void assignDiffuseColor(glm::vec4 diffuseColor);
 
+	void assignMetalnessTexture(const Ref<Texture>& texture);
+	void assignMetalness(float metalness);
+
+	// TODO: Support smoothness
+	void assignRoughnessTexture(const Ref<Texture>& texture);
+	void assignRoughness(float roughness);
+
+	void assignNormalTexture(const Ref<Texture>& texture);
+
 	Ref<Texture> getDiffuseTexture();
 	glm::vec4 getDiffuseColor();
+
+	Ref<Texture> getMetalnessTexture();
+	float getMetalness();
+
+	Ref<Texture> getRoughnessTexture();
+	float getRoughness();
+
+	Ref<Texture> getNormalTexture();
 
 
 	// TODO: TEMP
@@ -38,5 +55,13 @@ private:
 
 	Ref<Texture> diffuseTexture;
 	glm::vec4 diffuseColor;
+
+	Ref<Texture> metalnessTexture;
+	float metalness;
+
+	Ref<Texture> roughnessTexture;
+	float roughness;
+
+	Ref<Texture> normalTexture;
 
 };
