@@ -12,6 +12,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "nlohmann/json.hpp"
+using json = nlohmann::json;
+
 
 /*
 * RenderEngine is the core class for the game engine.
@@ -44,13 +47,14 @@ public:
 		bool fullscreen
 	);
 
-	void launch_eval(
+	json launch_eval(
 		std::string windowTitle,
 		size_t width,
 		size_t height,
 		bool fullscreen,
 		glm::mat4* camMats,
-		size_t numCamMats
+		size_t numCamMats,
+		bool log
 	);
 
 	Graphics* getGraphics();

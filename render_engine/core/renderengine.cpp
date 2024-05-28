@@ -87,17 +87,18 @@ void RenderEngine::launch(
 }
 
 
-void RenderEngine::launch_eval(
+json RenderEngine::launch_eval(
 	std::string windowTitle,
 	size_t width,
 	size_t height,
 	bool fullscreen,
 	glm::mat4* camMats,
-	size_t numCamMats
+	size_t numCamMats,
+	bool log
 ) {
 
 	if (this->graphics == nullptr) {
-		return;
+		return json();
 	}
 
 	this->windowTitle = windowTitle;
@@ -112,6 +113,12 @@ void RenderEngine::launch_eval(
 		);
 	}
 
+	std::vector<float> loggedFrametimes;
+	if (log) {
+		loggedFrametimes.reserve(numCamMats+1);
+	}
+
+
 	auto lasttime = std::chrono::high_resolution_clock::now();
 
 	bool done = false;
@@ -120,6 +127,9 @@ void RenderEngine::launch_eval(
 		auto diff = now - lasttime;
 		lasttime = now;
 		double deltaTime = diff.count() / 1000000000.0;
+		if (log) {
+			loggedFrametimes.push_back((float)deltaTime);
+		}
 
 		this->depsgraph.resolveGraph();
 		if (this->activeScene) {
@@ -137,6 +147,11 @@ void RenderEngine::launch_eval(
 
 	Callbacks_GLFW::unregisterWindow(this->graphics->getWindow());
 	this->graphics->destroyWindow();
+
+	if (log) {
+		return json(loggedFrametimes);
+	}
+	return json();
 
 }
 

@@ -107,6 +107,7 @@ int main(int argc, char* argv[]) {
     RenderPipelineType pipeline = RenderPipelineType::Deferred;
     std::string pipeline_name = "deferred-none";
     size_t lights = 100;
+    std::filesystem::path log_file;
 
     // Parse arguments
     std::vector<std::string> args;
@@ -135,6 +136,11 @@ int main(int argc, char* argv[]) {
                 pipeline = RenderPipelineType::Deferred;
             else argsError();
             pipeline_name = args[i];
+        }
+        else if (args[i] == "--log-file") {
+            if (++i == args.size())
+                argsError();
+            log_file = args[i];
         }
         else {
             argsError();
@@ -166,7 +172,13 @@ int main(int argc, char* argv[]) {
         cam_mats.insert(cam_mats.end(), m.begin(), m.end());
     }
 
-    engine.launch_eval("Eval", 1280, 720, true, (glm::mat4*)cam_mats.data(), num_cam_mats);
+    engine.launch("test", 1920, 1080, false);
+    //json result = engine.launch_eval("Eval", 1280, 720, false, (glm::mat4*)cam_mats.data(), num_cam_mats, !log_file.empty());
+
+    if (!log_file.empty()) {
+        std::ofstream log_out(log_file);
+    //    log_out << result.dump();
+    }
 
     return 0;
 }
