@@ -27,8 +27,8 @@ void setupDemoScene(Scene* scene) {
 
     scene->backgroundColor = 1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
 
-    std::cout << "Loading scene\n";
-    Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/ship/ship.gltf");
+    std::cout << "Loading scene\n"; 
+    Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/sponza/Sponza_smol.gltf");
     if (!object) {
         std::cout << "Failed to load scene\n";
         exit(0);

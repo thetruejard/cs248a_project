@@ -287,6 +287,10 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 	this->lightShader.setUniformTex("textureAlbedo", this->gbAlbedoTex, 2);
 	this->lightShader.setUniformTex("textureMetalRough", this->gbMetalRoughTex, 3);
 
+	// TODO: based on culling method, use SSBO instead of the following
+	// updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix)
+	
+	
 	for (GO_Light* light : scene->lights) {
 		glm::vec4 posVector = viewMatrix * light->getModelMatrix()[3];
 		this->lightShader.setUniform4f("light.positionType",
@@ -370,4 +374,55 @@ void RP_Deferred_OpenGL::renderPrimitive(
 	this->rawShader.setUniformMat4("mat", mat);
 	glDisable(GL_DEPTH_TEST);
 	this->thisGraphics->primitives.rectangle->draw();
+}
+
+
+
+
+struct SSBOLight {
+	// Position (xyz) and type (w).
+	// Type matches the enum in go_light.h.
+	// None=0, Dir=1, Point=2, Spot=3.
+	glm::vec4 positionType;
+	// Normalized direction for point and spot lights.
+	glm::vec3 direction;
+	// Inner & outer angles (radians) for spot lights.
+	glm::vec2 innerOuterAngles;
+	// Color.
+	glm::vec3 color;
+	// Attenuation: (constant, linear, quadratic).
+	glm::vec3 attenuation;
+};
+
+void RP_Deferred_OpenGL::updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix) {
+	if (!scene) return;
+	std::vector<GO_Light*>& lights = scene->lights;
+	if (this->lightsSSBO == 0 || this->lightsSSBONumLights != lights.size()) {
+		if (this->lightsSSBO == 0)
+			glGenBuffers(1, &this->lightsSSBO);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->lightsSSBO);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, 1 + lights.size() * sizeof(SSBOLight), (void*)0, GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, this->lightsSSBOBinding, this->lightsSSBO);
+		this->lightsSSBONumLights = lights.size();
+	}
+	else {
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->lightsSSBO);
+	}
+	uint8_t* buf = (uint8_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
+	// First element is number of lights.
+	((GLint*)buf)[0] = (GLint)lights.size();
+	// Rest of the array is SSBOLight classes.
+	for (size_t i = 0; i < lights.size(); i++) {
+		GO_Light* src_light = lights[i];
+		SSBOLight* dst_light = ((SSBOLight*)(buf + 1)) + i;
+		glm::vec4 posVector = viewMatrix * src_light->getModelMatrix()[3];
+		glm::vec4 dirVector = viewMatrix * glm::vec4(src_light->getWorldSpaceDirection(), 0.0f);
+		dst_light->positionType = glm::vec4(glm::vec3(posVector), (float)src_light->type);
+		dst_light->direction = glm::normalize(dirVector);
+		dst_light->innerOuterAngles = src_light->innerOuterAngles;
+		dst_light->color = src_light->color;
+		dst_light->attenuation = src_light->attenuation;
+	}
+	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }

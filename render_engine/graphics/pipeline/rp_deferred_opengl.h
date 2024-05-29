@@ -39,4 +39,9 @@ private:
 	GLuint postFBO = 0;
 	GLuint postTex = 0;
 
+	GLuint lightsSSBO = 0;
+	GLuint lightsSSBONumLights = 0;
+	static constexpr GLuint lightsSSBOBinding = 1;
+	void updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix);
+
 };
