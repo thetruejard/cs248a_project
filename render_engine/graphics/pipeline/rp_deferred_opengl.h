@@ -24,6 +24,7 @@ private:
 	Shader_OpenGL gBufferShader;
 	Shader_OpenGL lightShader;
 	Shader_OpenGL rawShader;
+	Shader_OpenGL postShader;
 
 	GLsizei width = 0;
 	GLsizei height = 0;
@@ -35,8 +36,7 @@ private:
 	GLuint gbMetalRoughTex = 0;
 	GLuint gbDepthRB = 0;
 
-	// TEMP while waiting for gamma solution.
-	GLuint preGammaFBO = 0;
-	GLuint preGammaTex = 0;
+	GLuint postFBO = 0;
+	GLuint postTex = 0;
 
 };

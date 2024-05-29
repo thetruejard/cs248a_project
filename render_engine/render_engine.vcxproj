@@ -242,6 +242,8 @@
     <None Include="shaders\opengl\deferred_gbuffer.vert" />
     <None Include="shaders\opengl\deferred_light.frag" />
     <None Include="shaders\opengl\deferred_light.vert" />
+    <None Include="shaders\opengl\post.frag" />
+    <None Include="shaders\opengl\post.vert" />
     <None Include="shaders\opengl\raw.frag" />
     <None Include="shaders\opengl\raw.vert" />
     <None Include="shaders\opengl\temp.frag" />

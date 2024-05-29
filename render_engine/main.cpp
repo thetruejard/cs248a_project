@@ -25,10 +25,10 @@ RenderEngine engine;
 
 void setupDemoScene(Scene* scene) {
 
-    scene->backgroundColor = 0.1f * glm::vec3(0.5f, 0.6f, 1.0f);
+    scene->backgroundColor = 1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
 
     std::cout << "Loading scene\n";
-    Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/Sponza/Sponza_smol.gltf");
+    Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/ship/ship.gltf");
     if (!object) {
         std::cout << "Failed to load scene\n";
         exit(0);
@@ -59,11 +59,11 @@ void setupDemoScene(Scene* scene) {
     auto random = []() { return float(rand()) / float(RAND_MAX); };
     std::function<void(Ref<GameObject>)> dim_the_lights = [&dim_the_lights, &random](Ref<GameObject> root) {
         if (root->getTypeName() == "Light") {
-            constexpr float brightness = 0.0001f;
+            constexpr float brightness = 0.005f; // 0.0001f
             auto L = root.cast<GO_Light>();
             L->color *= brightness;
             if (L->type == GO_Light::Type::Directional) {
-                L->color *= 0.0f;
+                L->color *= 2.0f;
             }
             std::cout << "LIGHT: " << root->getName() << " | ";
             Utils::Print::vec3(root.cast<GO_Light>()->color);
@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
     std::string pipeline_name = "deferred-none";
     size_t lights = 100;
     std::filesystem::path log_file;
-    bool interactive = false;
+    bool interactive = true;
 
     // Parse arguments
     std::vector<std::string> args;
@@ -142,6 +142,9 @@ int main(int argc, char* argv[]) {
             if (++i == args.size())
                 argsError();
             log_file = args[i];
+        }
+        else if (args[i] == "--eval") {
+            interactive = false;
         }
         else if (args[i] == "--interactive" || args[i] == "-I") {
             interactive = true;

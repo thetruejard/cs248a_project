@@ -2,6 +2,7 @@
 #include "core/scene.h"
 #include "objects/gameobject.h"
 #include "objects/go_camera.h"
+#include "utils/printutils.h"
 
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/gtc/matrix_transform.hpp"
@@ -28,6 +29,10 @@ void RP_Deferred_OpenGL::init() {
 	this->rawShader.read(
 		"shaders/opengl/raw.vert",
 		"shaders/opengl/raw.frag"
+	);
+	this->postShader.read(
+		"shaders/opengl/post.vert",
+		"shaders/opengl/post.frag"
 	);
 }
 
@@ -118,20 +123,20 @@ void RP_Deferred_OpenGL::resizeFramebuffer(size_t width, size_t height) {
 
 	// TEMP: until a gamma solution
 
-	if (glIsFramebuffer(this->preGammaFBO)) {
-		glDeleteFramebuffers(1, &this->preGammaFBO);
+	if (glIsFramebuffer(this->postFBO)) {
+		glDeleteFramebuffers(1, &this->postFBO);
 	}
-	if (glIsTexture(this->preGammaTex)) {
-		glDeleteTextures(1, &this->preGammaTex);
+	if (glIsTexture(this->postTex)) {
+		glDeleteTextures(1, &this->postTex);
 	}
-	glGenFramebuffers(1, &this->preGammaFBO);
-	glBindFramebuffer(GL_FRAMEBUFFER, this->preGammaFBO);
-	glGenTextures(1, &this->preGammaTex);
-	glBindTexture(GL_TEXTURE_2D, this->preGammaTex);
+	glGenFramebuffers(1, &this->postFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, this->postFBO);
+	glGenTextures(1, &this->postTex);
+	glBindTexture(GL_TEXTURE_2D, this->postTex);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, this->width, this->height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this->preGammaTex, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this->postTex, 0);
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 		std::cout << "Deferred renderer: Failed to initialize preGamma buffer.\n";
 	}
@@ -158,7 +163,7 @@ static void bindMaterial(Shader_OpenGL& shader, Ref<Material> material) {
 			GPUTexture* gpuTex = material->getMetalnessTexture()->getGPUTexture();
 			shader.setUniformTex("textureMetalness",
 				((GPUTexture_OpenGL*)gpuTex)->getGLTexID(),
-				0, GL_TEXTURE_2D
+				1, GL_TEXTURE_2D
 			);
 		}
 		// Roughness
@@ -168,7 +173,7 @@ static void bindMaterial(Shader_OpenGL& shader, Ref<Material> material) {
 			GPUTexture* gpuTex = material->getRoughnessTexture()->getGPUTexture();
 			shader.setUniformTex("textureRoughness",
 				((GPUTexture_OpenGL*)gpuTex)->getGLTexID(),
-				0, GL_TEXTURE_2D
+				2, GL_TEXTURE_2D
 			);
 		}
 		// Normal
@@ -177,7 +182,7 @@ static void bindMaterial(Shader_OpenGL& shader, Ref<Material> material) {
 			GPUTexture* gpuTex = material->getNormalTexture()->getGPUTexture();
 			shader.setUniformTex("textureNormal",
 				((GPUTexture_OpenGL*)gpuTex)->getGLTexID(),
-				0, GL_TEXTURE_2D
+				3, GL_TEXTURE_2D
 			);
 		}
 
@@ -247,7 +252,7 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 	//this->lightShader.setUniform1f("specular", 1.0f);
 
 
-	glBindFramebuffer(GL_FRAMEBUFFER, this->preGammaFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, this->postFBO);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -288,6 +293,11 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 			glm::vec4(posVector.x, posVector.y, posVector.z, (float)light->type)
 		);
 		glm::vec4 dirVector = viewMatrix * glm::vec4(light->getWorldSpaceDirection(), 0.0f);
+		if (light->type == GO_Light::Type::Directional) {
+			std::cout << "sun dir:";
+			Utils::Print::vec3(light->getWorldSpaceDirection());
+			std::cout << "\n";
+		}
 		this->lightShader.setUniform3f("light.direction", glm::normalize(dirVector));
 		this->lightShader.setUniform2f("light.innerOuterAngles", light->innerOuterAngles);
 		this->lightShader.setUniform3f("light.color", light->color);
@@ -301,23 +311,24 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_BLEND);
-	this->rawShader.bind();
-	this->rawShader.setUniformTex("textureMain", this->preGammaTex);
-	this->rawShader.setUniform4f("colorMain", glm::vec4(0.0f));
+	this->postShader.bind();
+	this->postShader.setUniformTex("textureMain", this->postTex);
 	mat[0] = glm::vec4(2.0f, 0.0f, 0.0f, 0.0f);
 	mat[1] = glm::vec4(0.0f, 2.0f, 0.0f, 0.0f);
 	mat[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 	mat[3] = glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f);
-	this->rawShader.setUniformMat4("mat", mat);
-	glEnable(GL_FRAMEBUFFER_SRGB);
+	this->postShader.setUniformMat4("mat", mat);
+	//glEnable(GL_FRAMEBUFFER_SRGB);
 	this->thisGraphics->primitives.rectangle->draw();
-	glDisable(GL_FRAMEBUFFER_SRGB);
+	//glDisable(GL_FRAMEBUFFER_SRGB);
+	// The rest of this is to make sure the background color is drawn.
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, this->gBuffer);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glBlitFramebuffer(0, 0, this->width, this->height, 0, 0, this->width, this->height,
 		GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	mat[3] = glm::vec4(-1.0f, -1.0f, 1.0f, 1.0f);
+	this->rawShader.bind();
 	this->rawShader.setUniformMat4("mat", mat);
 	this->rawShader.setUniform4f("colorMain", glm::vec4(scene->backgroundColor, 1.0f));
 	glEnable(GL_DEPTH_TEST);

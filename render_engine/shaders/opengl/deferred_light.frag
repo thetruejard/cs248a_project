@@ -35,6 +35,9 @@ uniform float specularShininess;
 // How much the specular component contributes to the final color.
 uniform float specular;
 
+const float PI = 3.14159265358979323;
+
+
 
 // This is the data we're receiving from the vertex shader..
 // "attribs" is the name of the data block (must match in vert shader).
@@ -43,6 +46,47 @@ in attribs {
 	vec3 position;
 	vec2 uv;
 } fs_in;
+
+
+float DistributionGGX(vec3 N, vec3 H, float roughness)
+{
+    float a      = roughness*roughness;
+    float a2     = a*a;
+    float NdotH  = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH*NdotH;
+	
+    float num   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+	
+    return num / denom;
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r*r) / 8.0;
+
+    float num   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+	
+    return num / denom;
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2  = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1  = GeometrySchlickGGX(NdotL, roughness);
+	
+    return ggx1 * ggx2;
+}
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
 
 
 
@@ -59,15 +103,53 @@ vec3 computeLightFromDir(
 
 	// Kindasorta Phong shading.
 	// Ambient.
-	float light = 0.1;
+	//float light = 0.1;
 	// Diffuse.
-	light += max(0, dot(normal, dirToLight));
+	//light += max(0, dot(normal, dirToLight));
 	
 	// Specular.
-	float specularComponent = max(0, dot(-dirToLight, reflect(dirToCamera, normal)));
-	light += specular * pow(specularComponent, specularShininess);
+	//float specularComponent = max(0, dot(-dirToLight, reflect(dirToCamera, normal)));
+	//light += specular * pow(specularComponent, specularShininess);
+	
+	//return max(vec3(0.0, 0.0, 0.0), light * lightColor * baseColor);
 
-	return max(vec3(0.0, 0.0, 0.0), light * lightColor * baseColor);
+	vec3 N = normal;
+    vec3 V = dirToCamera;
+
+	vec3 F0 = vec3(0.04); 
+    F0 = mix(F0, baseColor, metalness);
+
+    // reflectance equation
+    vec3 Lo = vec3(0.0);
+
+    // calculate per-light radiance
+    vec3 L = dirToLight;
+    vec3 H = normalize(V + L);
+    vec3 radiance = lightColor;
+
+    // cook-torrance brdf
+    float NDF = DistributionGGX(N, H, roughness);
+    float G = GeometrySmith(N, V, L, roughness);
+    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - metalness;
+
+    vec3 numerator = NDF * G * F;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+    vec3 specular = numerator / denominator;
+
+    // add to outgoing radiance Lo
+    float NdotL = max(dot(N, L), 0.0);
+    Lo += (kD * baseColor / PI + specular) * radiance * NdotL;
+
+    vec3 ambient = vec3(0.0);//vec3(0.002) * baseColor; // * ao;		// We don't support AO
+    vec3 color = ambient + Lo;
+	
+	// Part of post/gamma stuff:
+    //color = color / (color + vec3(1.0));
+	return color;
 }
 
 
@@ -125,7 +207,7 @@ void main() {
 
 	vec2 uv = vec2(fs_in.position.x, fs_in.position.y) * 0.5 + 0.5;
 	vec3 position = texture(texturePos, fs_in.uv).xyz;
-	vec3 albedo = texture(textureAlbedo, fs_in.uv).rgb;
+	vec3 albedo = pow(texture(textureAlbedo, fs_in.uv).rgb, vec3(2.2));
 	vec2 metalRough = texture(textureMetalRough, fs_in.uv).xy;
 	vec3 normal = texture(textureNormals, fs_in.uv).xyz;
 
