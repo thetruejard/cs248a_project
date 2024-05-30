@@ -1,4 +1,4 @@
-#version 330 core
+#version 430 core
 
 layout (location = 0) out vec4 outColor;
 
@@ -11,29 +11,35 @@ uniform sampler2D textureMetalRough;
 
 
 // Light parameters.
+// We always use vec4 to avoid common alignment bugs in the OpenGL drivers
 struct Light {
 	// Position (xyz) and type (w).
 	// Type matches the enum in go_light.h.
 	// None=0, Dir=1, Point=2, Spot=3.
-	vec4 positionType;
+	vec4 positionType;			// vec4
 	// Normalized direction for point and spot lights.
-	vec3 direction;
+	vec4 direction;				// vec3
 	// Inner & outer angles (radians) for spot lights.
-	vec2 innerOuterAngles;
+	vec4 innerOuterAngles;		// vec2
 	// Color.
-	vec3 color;
+	vec4 color;					// vec3
 	// Attenuation: (constant, linear, quadratic).
-	vec3 attenuation;
+	vec4 attenuation;			// vec3
 };
 
 // TODO: Support multiple lights in a single pass?
 uniform Light light;
 
 
-// The shininess of the specular component of the material.
-uniform float specularShininess;
-// How much the specular component contributes to the final color.
-uniform float specular;
+// First elem is culling method, second is meta
+// None=0
+// BoundingSphere=1
+// RasterSphere=2 [meta is light index]
+// Tiled=3
+// Clustered=4
+uniform ivec2 cullingMethod;
+
+
 
 const float PI = 3.14159265358979323;
 
@@ -99,19 +105,6 @@ vec3 computeLightFromDir(
 	float roughness,	// roughness of the surface
 	vec3 normal			// normal of surface
 ) {
-	// TODO: Consider replacing with PBR rendering.
-
-	// Kindasorta Phong shading.
-	// Ambient.
-	//float light = 0.1;
-	// Diffuse.
-	//light += max(0, dot(normal, dirToLight));
-	
-	// Specular.
-	//float specularComponent = max(0, dot(-dirToLight, reflect(dirToCamera, normal)));
-	//light += specular * pow(specularComponent, specularShininess);
-	
-	//return max(vec3(0.0, 0.0, 0.0), light * lightColor * baseColor);
 
 	vec3 N = normal;
     vec3 V = dirToCamera;
@@ -144,11 +137,9 @@ vec3 computeLightFromDir(
     float NdotL = max(dot(N, L), 0.0);
     Lo += (kD * baseColor / PI + specular) * radiance * NdotL;
 
-    vec3 ambient = vec3(0.0);//vec3(0.002) * baseColor; // * ao;		// We don't support AO
+    vec3 ambient = vec3(0.0); //vec3(0.002) * baseColor; // * ao;		// We don't support AO
     vec3 color = ambient + Lo;
 	
-	// Part of post/gamma stuff:
-    //color = color / (color + vec3(1.0));
 	return color;
 }
 
@@ -172,17 +163,17 @@ vec3 processLight(
 	}
 
 	vec3 dirToLight;
-	vec3 lightColor = light.color;
+	vec3 lightColor = vec3(light.color);
 
 	if (type == 1.0) {
 		// Directional.
-		dirToLight = normalize(-light.direction);
+		dirToLight = normalize(-vec3(light.direction));
 	}
 	else if (type == 2.0) {
 		// Point.
 		vec3 diff = light.positionType.xyz - position;
 		dirToLight = normalize(diff);
-		lightColor *= computeAttenuation(length(diff), light.attenuation);
+		lightColor *= computeAttenuation(length(diff), vec3(light.attenuation));
 	}
 	else if (type == 3.0) {
 		// Spot.
@@ -195,29 +186,59 @@ vec3 processLight(
 		baseColor,
 		metalness,
 		roughness,
-		normal
+		normalize(normal)
 	);
 }
 
 
 
+// Binding must align with rp_deferred_opengl.h
+layout(std430, binding = 0) buffer lightBuffer
+{
+	// 4 elements to avoid alignment issues. Only use the first one.
+	ivec4 numLights;
+    vec4 lightData[];
+};
+Light getLightData(int idx) {
+	Light l;
+	int offset = idx * 5;
+	l.positionType = lightData[offset + 0];
+	l.direction = lightData[offset + 1];
+	l.innerOuterAngles = lightData[offset + 2];
+	l.color = lightData[offset + 3];
+	l.attenuation = lightData[offset + 4];
+	return l;
+}
+
 
 
 void main() {
 
-	vec2 uv = vec2(fs_in.position.x, fs_in.position.y) * 0.5 + 0.5;
+	vec2 uv = fs_in.position.xy * 0.5 + 0.5;
 	vec3 position = texture(texturePos, fs_in.uv).xyz;
 	vec3 albedo = pow(texture(textureAlbedo, fs_in.uv).rgb, vec3(2.2));
 	vec2 metalRough = texture(textureMetalRough, fs_in.uv).xy;
 	vec3 normal = texture(textureNormals, fs_in.uv).xyz;
 
-	outColor = vec4(processLight(
-		light,
-		position,
-		albedo,
-		metalRough.x,
-		metalRough.y,
-		normal
-	), 1.0);
+	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+
+	if (cullingMethod.x == 0) {
+		// None
+		for (int i = 0; i < numLights.x; i++) {
+			color += vec4(processLight(
+				getLightData(i),
+				position,
+				albedo,
+				metalRough.x,
+				metalRough.y,
+				normal
+			), 0.0);
+		}
+	}
+	else {
+		color += vec4(1.0, 0.0, 1.0, 0.0);
+	}
+	
+	outColor = color;
 
 }

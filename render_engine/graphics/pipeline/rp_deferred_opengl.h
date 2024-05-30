@@ -19,6 +19,18 @@ public:
 	virtual void renderPrimitive(Rectangle rect,
 		Ref<Material> material) override;
 
+
+	// Indices should align with values in deferred_light.frag.
+	enum class LightCulling : GLint {
+		None = 0,
+		BoundingSphere,
+		RasterSphere,
+		Tiled,
+		Clustered,
+	};
+	LightCulling culling = LightCulling::None;
+
+
 private:
 
 	Shader_OpenGL gBufferShader;
@@ -40,8 +52,8 @@ private:
 	GLuint postTex = 0;
 
 	GLuint lightsSSBO = 0;
-	GLuint lightsSSBONumLights = 0;
-	static constexpr GLuint lightsSSBOBinding = 1;
+	size_t lightsSSBONumLights = 0;
+	static constexpr GLuint lightsSSBOBinding = 0;		// Must align with deferred_light.frag
 	void updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix);
 
 };

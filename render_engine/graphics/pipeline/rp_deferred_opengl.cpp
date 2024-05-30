@@ -290,23 +290,35 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 	// TODO: based on culling method, use SSBO instead of the following
 	// updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix)
 	
-	
-	for (GO_Light* light : scene->lights) {
-		glm::vec4 posVector = viewMatrix * light->getModelMatrix()[3];
-		this->lightShader.setUniform4f("light.positionType",
-			glm::vec4(posVector.x, posVector.y, posVector.z, (float)light->type)
-		);
-		glm::vec4 dirVector = viewMatrix * glm::vec4(light->getWorldSpaceDirection(), 0.0f);
-		if (light->type == GO_Light::Type::Directional) {
-			std::cout << "sun dir:";
-			Utils::Print::vec3(light->getWorldSpaceDirection());
-			std::cout << "\n";
-		}
-		this->lightShader.setUniform3f("light.direction", glm::normalize(dirVector));
-		this->lightShader.setUniform2f("light.innerOuterAngles", light->innerOuterAngles);
-		this->lightShader.setUniform3f("light.color", light->color);
-		this->lightShader.setUniform3f("light.attenuation", light->attenuation);
+
+	if (this->culling != LightCulling::BoundingSphere) {
+
+		this->updateLightsSSBO(scene, viewMatrix);
+		this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)this->culling, 0));
 		this->thisGraphics->primitives.rectangle->draw();
+
+	}
+	else {
+
+		// TODO: Make this a sphere
+		for (GO_Light* light : scene->lights) {
+			glm::vec4 posVector = viewMatrix * light->getModelMatrix()[3];
+			this->lightShader.setUniform4f("light.positionType",
+				glm::vec4(posVector.x, posVector.y, posVector.z, (float)light->type)
+			);
+			glm::vec4 dirVector = viewMatrix * glm::vec4(light->getWorldSpaceDirection(), 0.0f);
+			if (light->type == GO_Light::Type::Directional) {
+				std::cout << "sun dir:";
+				Utils::Print::vec3(light->getWorldSpaceDirection());
+				std::cout << "\n";
+			}
+			this->lightShader.setUniform3f("light.direction", glm::normalize(dirVector));
+			this->lightShader.setUniform2f("light.innerOuterAngles", light->innerOuterAngles);
+			this->lightShader.setUniform3f("light.color", light->color);
+			this->lightShader.setUniform3f("light.attenuation", light->attenuation);
+			this->thisGraphics->primitives.rectangle->draw();
+		}
+
 	}
 
 
@@ -379,50 +391,65 @@ void RP_Deferred_OpenGL::renderPrimitive(
 
 
 
+// We use all vec4s to avoid common alignment bugs in the OpenGL drivers.
 struct SSBOLight {
 	// Position (xyz) and type (w).
 	// Type matches the enum in go_light.h.
 	// None=0, Dir=1, Point=2, Spot=3.
-	glm::vec4 positionType;
+	glm::vec4 positionType;			// vec4
 	// Normalized direction for point and spot lights.
-	glm::vec3 direction;
+	glm::vec4 direction;			// vec3
 	// Inner & outer angles (radians) for spot lights.
-	glm::vec2 innerOuterAngles;
+	glm::vec4 innerOuterAngles;		// vec2
 	// Color.
-	glm::vec3 color;
+	glm::vec4 color;				// vec3
 	// Attenuation: (constant, linear, quadratic).
-	glm::vec3 attenuation;
+	glm::vec4 attenuation;			// vec3
 };
+int x = sizeof(SSBOLight);
 
 void RP_Deferred_OpenGL::updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix) {
 	if (!scene) return;
 	std::vector<GO_Light*>& lights = scene->lights;
 	if (this->lightsSSBO == 0 || this->lightsSSBONumLights != lights.size()) {
-		if (this->lightsSSBO == 0)
-			glGenBuffers(1, &this->lightsSSBO);
+		if (this->lightsSSBO != 0)
+			glDeleteBuffers(1, &this->lightsSSBO);
+		glGenBuffers(1, &this->lightsSSBO);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->lightsSSBO);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, 1 + lights.size() * sizeof(SSBOLight), (void*)0, GL_DYNAMIC_DRAW);
+		// +4 for ivec4 numLights
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(glm::ivec4) + lights.size() * sizeof(SSBOLight), (void*)0, GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, this->lightsSSBOBinding, this->lightsSSBO);
 		this->lightsSSBONumLights = lights.size();
 	}
 	else {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->lightsSSBO);
 	}
-	uint8_t* buf = (uint8_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
+
+	size_t len = sizeof(glm::ivec4) + lights.size() * sizeof(SSBOLight);
+	uint8_t* buf = new uint8_t[len];
 	// First element is number of lights.
-	((GLint*)buf)[0] = (GLint)lights.size();
+	((glm::ivec4*)buf)[0] = glm::ivec4((GLint)lights.size(), 0, 0, 0);
 	// Rest of the array is SSBOLight classes.
 	for (size_t i = 0; i < lights.size(); i++) {
 		GO_Light* src_light = lights[i];
-		SSBOLight* dst_light = ((SSBOLight*)(buf + 1)) + i;
+		SSBOLight* dst_light = ((SSBOLight*)(buf + sizeof(glm::ivec4))) + i;
 		glm::vec4 posVector = viewMatrix * src_light->getModelMatrix()[3];
 		glm::vec4 dirVector = viewMatrix * glm::vec4(src_light->getWorldSpaceDirection(), 0.0f);
 		dst_light->positionType = glm::vec4(glm::vec3(posVector), (float)src_light->type);
-		dst_light->direction = glm::normalize(dirVector);
-		dst_light->innerOuterAngles = src_light->innerOuterAngles;
-		dst_light->color = src_light->color;
-		dst_light->attenuation = src_light->attenuation;
+		dst_light->direction = glm::vec4(glm::normalize(glm::vec3(dirVector)), 0.0f);
+		dst_light->innerOuterAngles = glm::vec4(src_light->innerOuterAngles, 0.0f, 0.0f);
+		dst_light->color = glm::vec4(src_light->color, 0.0f);
+		dst_light->attenuation = glm::vec4(src_light->attenuation, 0.0f);
+		if (i == 0) {
+			std::cout << "Light 0\n";
+			std::cout << "\tpositionType: "; Utils::Print::vec4(dst_light->positionType);
+			std::cout << "\tdirection: "; Utils::Print::vec4(dst_light->direction);
+			std::cout << "\tinnerOuterAngles: "; Utils::Print::vec4(dst_light->innerOuterAngles);
+			std::cout << "\tcolor: "; Utils::Print::vec4(dst_light->color);
+			std::cout << "\tattenuation: "; Utils::Print::vec4(dst_light->attenuation);
+		}
 	}
-	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, (GLintptr)0, (GLsizeiptr)len, buf);
+	delete[] buf;
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
