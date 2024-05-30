@@ -210,6 +210,17 @@ Light getLightData(int idx) {
 	return l;
 }
 
+// pos: vec3, radius float
+vec4 getBoundingSphere(Light light) {
+	const float thresh = 0.2f;
+	// See computation in go_light.cpp
+	float color = length(light.color.rgb);
+	float atten = light.attenuation.z;
+	float rad = sqrt(color / (thresh * atten));
+	return vec4(light.positionType.xyz, rad);
+}
+
+
 
 
 void main() {
@@ -225,6 +236,26 @@ void main() {
 	if (cullingMethod.x == 0) {
 		// None
 		for (int i = 0; i < numLights.x; i++) {
+			color += vec4(processLight(
+				getLightData(i),
+				position,
+				albedo,
+				metalRough.x,
+				metalRough.y,
+				normal
+			), 0.0);
+		}
+	}
+	else if (cullingMethod.x == 1) {
+		// BoundingSphere
+		for (int i = 0; i < numLights.x; i++) {
+			Light l = getLightData(i);
+			vec4 boundingSphere = getBoundingSphere(l);
+			if (l.positionType.w == 2.0 &&
+				distance(position, boundingSphere.xyz) >= boundingSphere.w) {
+				// Outside the sphere, cull the light
+				continue;
+			}
 			color += vec4(processLight(
 				getLightData(i),
 				position,

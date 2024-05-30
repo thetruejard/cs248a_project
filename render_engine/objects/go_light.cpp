@@ -29,3 +29,12 @@ glm::vec3 GO_Light::getWorldSpaceDirection() {
 	glm::vec4 d = this->getModelMatrix() * glm::vec4(this->direction, 0.0f);
 	return glm::vec3(d.x, d.y, d.z);
 }
+
+
+Sphere GO_Light::getBoundingSphere(float thresh) {
+	// A = color / (atten * r^2)
+	// r = sqrt(len(color) / (A * atten))
+	float color = glm::length(this->color);
+	float atten = this->attenuation.z;
+	return sqrt(color / (thresh * atten));
+}

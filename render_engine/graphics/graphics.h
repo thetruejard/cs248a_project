@@ -64,6 +64,7 @@ public:
 	* TODO: Support editing pipeline settings.
 	*/
 	virtual void setRenderPipeline(RenderPipelineType pipelineType) = 0;
+	RenderPipeline* getRenderPipeline();
 
 	/*
 	* Called by Callbacks_GLFW when the size of the primary framebuffer changes.
@@ -149,7 +150,7 @@ public:
 		// Cube: [0,1]x[0,1]x[0,1]
 		//Ref<Mesh> cube;
 		// Sphere: Unit sphere at (0,0,0)
-		//Ref<Mesh> sphere;
+		Ref<Mesh> sphere;
 	} primitives;
 
 	void initPrimitives();

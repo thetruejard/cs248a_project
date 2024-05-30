@@ -1,5 +1,6 @@
 #pragma once
 #include "objects/gameobject.h"
+#include "geometry/sphere.h"
 
 
 class GO_Light : public GameObject {
@@ -35,5 +36,8 @@ public:
 
 
 	glm::vec3 getWorldSpaceDirection();
+
+	// ASSUMES QUADRATIC ATTENUATION
+	Sphere getBoundingSphere(float thresh = 0.2f);
 
 };

@@ -109,7 +109,6 @@ void Graphics::renderPrimitive(Rectangle rect, Ref<Material> material) {
 
 
 void Graphics::initPrimitives() {
-	Ref<Mesh> mesh;
 
 	// Rectangle.
 	this->primitives.rectangle = this->thisEngine->createMesh();
@@ -120,6 +119,18 @@ void Graphics::initPrimitives() {
 		std::cout << "Failed to initialize primitive \"Rectangle\"\n";
 	}
 	this->primitives.rectangle->uploadMesh();
+
+	// Sphere
+	Sphere s(1.0f, glm::vec3(0.0f));
+	this->primitives.sphere = this->thisEngine->createMesh();
+	s.toMesh(this->primitives.sphere, 24, 12);
+	this->primitives.sphere->uploadMesh();
+
+}
+
+
+RenderPipeline* Graphics::getRenderPipeline() {
+	return this->pipeline;
 }
 
 

@@ -10,6 +10,8 @@
 #include "objects/go_mesh.h"
 #include "utils/printutils.h"
 
+#include "graphics/pipeline/rp_deferred_opengl.h"
+
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
 
@@ -25,7 +27,7 @@ RenderEngine engine;
 
 void setupDemoScene(Scene* scene) {
 
-    scene->backgroundColor = 1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
+    scene->backgroundColor = 0.1f * glm::vec3(0.5f, 0.6f, 1.0f); //1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
 
     std::cout << "Loading scene\n"; 
     Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/ship/ship.gltf");
@@ -63,7 +65,7 @@ void setupDemoScene(Scene* scene) {
             auto L = root.cast<GO_Light>();
             L->color *= brightness;
             if (L->type == GO_Light::Type::Directional) {
-                L->color *= 2.0f;
+                L->color *= 0.0f;
             }
             std::cout << "LIGHT: " << root->getName() << " | ";
             Utils::Print::vec3(root.cast<GO_Light>()->color);
@@ -76,7 +78,11 @@ void setupDemoScene(Scene* scene) {
 
 
     size_t num_lights = 50;
+    bool make_atten_sphere = true;
+    Ref<Material> s_mat = engine.createMaterial();
+    s_mat->assignDiffuseColor(glm::vec4(1.0f, 1.0f, 1.0f , 1.0f));
     Ref<Mesh> sphere = engine.createMesh();
+    sphere->assignMaterial(s_mat);
     Sphere(0.1f).toMesh(sphere, 12, 8);
     sphere->uploadMesh();
     for (size_t i = 0; i < num_lights; i++) {
@@ -87,8 +93,21 @@ void setupDemoScene(Scene* scene) {
         glm::vec3 pos = glm::vec3(20.0f * (2.0f * random() - 1.0f), 10.0f * random(), 20.0f * (2.0f * random() - 1.0f));
         light->setPosition(pos);
         glm::vec3 color = glm::normalize(glm::vec3(random(), random(), random()));
-        light->color = 0.5f * color;
+        light->color = 1.0f * color;
         scene->addObject(light);
+        if (make_atten_sphere) {
+            Sphere bs = light->getBoundingSphere();
+            Ref<Mesh> bs_mesh = engine.createMesh();
+            bs.toMesh(bs_mesh, 12, 8);
+            bs_mesh->uploadMesh();
+            Ref<Material> bs_mat = engine.createMaterial();
+            bs_mat->assignDiffuseColor(glm::vec4(0.1f * color, 1.0f));
+            bs_mat->wireframe = true;
+            bs_mesh->assignMaterial(bs_mat);
+            Ref<GO_Mesh> bs_obj = engine.createObject<GO_Mesh>();
+            bs_obj->assignMesh(bs_mesh);
+            bs_obj->setParent(light, false);
+        }
     }
 
 
@@ -105,10 +124,12 @@ void argsError() {
 int main(int argc, char* argv[]) {
 
     RenderPipelineType pipeline = RenderPipelineType::Deferred;
-    std::string pipeline_name = "deferred-none";
+    std::string pipeline_name = "deferred-boundingsphere";
     size_t lights = 100;
     std::filesystem::path log_file;
     bool interactive = true;
+
+    srand(1);
 
     // Parse arguments
     std::vector<std::string> args;
@@ -127,7 +148,9 @@ int main(int argc, char* argv[]) {
                 argsError();
             if (args[i] == "deferred-none")
                 pipeline = RenderPipelineType::Deferred;
-            else if (args[i] == "deferred-sphere")
+            else if (args[i] == "deferred-boundingsphere")
+                pipeline = RenderPipelineType::Deferred;
+            else if (args[i] == "deferred-rastersphere")
                 pipeline = RenderPipelineType::Deferred;
             else if (args[i] == "forward-none")
                 pipeline = RenderPipelineType::Deferred;
@@ -154,11 +177,25 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    engine.getGraphics()->setRenderPipeline(pipeline);
+    RenderPipeline* gpipeline = engine.getGraphics()->getRenderPipeline();
+    if (pipeline_name == "deferred-none")
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
+    else if (pipeline_name == "deferred-boundingsphere")
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::BoundingSphere;
+    else if (pipeline_name == "deferred-rastersphere")
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
+    else if (pipeline_name == "forward-none")
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
+    else if (pipeline_name == "forward-tile")
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
+    else if (pipeline_name == "forward-cluster")
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
+
     std::cout << "lights: " << lights << "\n";
     std::cout << "pipeline: " << pipeline_name << "\n";
 
 
-    engine.getGraphics()->setRenderPipeline(pipeline);
     Ref<Scene> scene = engine.createScene();
     setupDemoScene(scene.get());
     engine.setActiveScene(scene);

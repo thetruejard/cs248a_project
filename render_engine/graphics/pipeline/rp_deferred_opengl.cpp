@@ -291,7 +291,7 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 	// updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix)
 	
 
-	if (this->culling != LightCulling::BoundingSphere) {
+	if (this->culling != LightCulling::RasterSphere) {
 
 		this->updateLightsSSBO(scene, viewMatrix);
 		this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)this->culling, 0));
@@ -299,6 +299,7 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 
 	}
 	else {
+		// Raster sphere
 
 		// TODO: Make this a sphere
 		for (GO_Light* light : scene->lights) {
@@ -307,11 +308,6 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 				glm::vec4(posVector.x, posVector.y, posVector.z, (float)light->type)
 			);
 			glm::vec4 dirVector = viewMatrix * glm::vec4(light->getWorldSpaceDirection(), 0.0f);
-			if (light->type == GO_Light::Type::Directional) {
-				std::cout << "sun dir:";
-				Utils::Print::vec3(light->getWorldSpaceDirection());
-				std::cout << "\n";
-			}
 			this->lightShader.setUniform3f("light.direction", glm::normalize(dirVector));
 			this->lightShader.setUniform2f("light.innerOuterAngles", light->innerOuterAngles);
 			this->lightShader.setUniform3f("light.color", light->color);
@@ -440,14 +436,6 @@ void RP_Deferred_OpenGL::updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix) {
 		dst_light->innerOuterAngles = glm::vec4(src_light->innerOuterAngles, 0.0f, 0.0f);
 		dst_light->color = glm::vec4(src_light->color, 0.0f);
 		dst_light->attenuation = glm::vec4(src_light->attenuation, 0.0f);
-		if (i == 0) {
-			std::cout << "Light 0\n";
-			std::cout << "\tpositionType: "; Utils::Print::vec4(dst_light->positionType);
-			std::cout << "\tdirection: "; Utils::Print::vec4(dst_light->direction);
-			std::cout << "\tinnerOuterAngles: "; Utils::Print::vec4(dst_light->innerOuterAngles);
-			std::cout << "\tcolor: "; Utils::Print::vec4(dst_light->color);
-			std::cout << "\tattenuation: "; Utils::Print::vec4(dst_light->attenuation);
-		}
 	}
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, (GLintptr)0, (GLsizeiptr)len, buf);
 	delete[] buf;

@@ -23,10 +23,10 @@ public:
 	// Indices should align with values in deferred_light.frag.
 	enum class LightCulling : GLint {
 		None = 0,
-		BoundingSphere,
-		RasterSphere,
-		Tiled,
-		Clustered,
+		BoundingSphere = 1,
+		RasterSphere = 2,
+		Tiled = 3,
+		Clustered = 4,
 	};
 	LightCulling culling = LightCulling::None;
 
