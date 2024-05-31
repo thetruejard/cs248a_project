@@ -1,7 +1,6 @@
 #version 430 core
 
 layout (location = 0) in vec3 position;
-layout (location = 4) in vec2 uv;
 // This shader ignores other attributes.
 
 uniform mat4 mat;
@@ -19,6 +18,6 @@ out attribs {
 void main() {
 	vec4 pos = mat * vec4(position, 1.0);
 	vs_out.position = pos.xyz;
-	vs_out.uv = uv;
+	vs_out.uv = pos.xy / pos.w;
 	gl_Position = pos;
 }

@@ -3,6 +3,7 @@
 #include "objects/gameobject.h"
 #include "objects/go_camera.h"
 #include "utils/printutils.h"
+#include "geometry/sphere.h"
 
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/gtc/matrix_transform.hpp"
@@ -267,8 +268,7 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 
 
 	this->lightShader.bind();
-	this->lightShader.setUniform1f("specularShininess", 6.0f);
-	this->lightShader.setUniform1f("specular", 0.1f);
+	this->lightShader.setUniform2f("viewportSize", glm::vec2((float)this->width, (float)this->height));
 
 	// Fullscreen quad matrix.
 	glm::mat4 mat;
@@ -280,6 +280,7 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 	glDisable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
 
 
 	this->lightShader.setUniformTex("texturePos", this->gbPosTex, 0);
@@ -290,33 +291,54 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 	// TODO: based on culling method, use SSBO instead of the following
 	// updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix)
 	
+	this->updateLightsSSBO(scene, viewMatrix);
 
 	if (this->culling != LightCulling::RasterSphere) {
 
-		this->updateLightsSSBO(scene, viewMatrix);
 		this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)this->culling, 0));
 		this->thisGraphics->primitives.rectangle->draw();
 
 	}
 	else {
 		// Raster sphere
-
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);	// The sphere's faces point inwards, so cull the outside faces
 		// TODO: Make this a sphere
-		for (GO_Light* light : scene->lights) {
-			glm::vec4 posVector = viewMatrix * light->getModelMatrix()[3];
-			this->lightShader.setUniform4f("light.positionType",
-				glm::vec4(posVector.x, posVector.y, posVector.z, (float)light->type)
-			);
-			glm::vec4 dirVector = viewMatrix * glm::vec4(light->getWorldSpaceDirection(), 0.0f);
-			this->lightShader.setUniform3f("light.direction", glm::normalize(dirVector));
-			this->lightShader.setUniform2f("light.innerOuterAngles", light->innerOuterAngles);
-			this->lightShader.setUniform3f("light.color", light->color);
-			this->lightShader.setUniform3f("light.attenuation", light->attenuation);
-			this->thisGraphics->primitives.rectangle->draw();
+		for (size_t i = 0; i < scene->lights.size(); i++) {
+			GO_Light* light = scene->lights[i];
+			// (method, light_index)
+			this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)LightCulling::RasterSphere, (GLint)i));
+			if (light->type == GO_Light::Type::Point) {
+				Sphere bs = light->getBoundingSphere();
+				// Rasterize spheres
+				glm::mat4 mat;
+				mat[0] = glm::vec4(bs.radius, 0.0f, 0.0f, 0.0f);
+				mat[1] = glm::vec4(0.0f, bs.radius, 0.0f, 0.0f);
+				mat[2] = glm::vec4(0.0f, 0.0f, bs.radius, 0.0f);
+				mat[3] = glm::vec4(bs.position, 1.0f);
+				mat = projMatrix * viewMatrix * mat;
+				this->lightShader.setUniformMat4("mat", mat);
+				this->thisGraphics->primitives.sphere->draw();
+			}
+			else {
+				// Other light type (i.e. sun), render every pixel
+				glDisable(GL_CULL_FACE);
+				glm::mat4 mat;
+				mat[0] = glm::vec4(2.0f, 0.0f, 0.0f, 0.0f);
+				mat[1] = glm::vec4(0.0f, 2.0f, 0.0f, 0.0f);
+				mat[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+				mat[3] = glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f);
+				this->lightShader.setUniformMat4("mat", mat);
+				this->thisGraphics->primitives.rectangle->draw();
+				glEnable(GL_CULL_FACE);
+			}
+			
 		}
+		glDisable(GL_CULL_FACE);
 
 	}
 
+	glDepthMask(GL_TRUE);
 
 
 	// TEMP: until a gamma solution

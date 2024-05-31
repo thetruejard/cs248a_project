@@ -9,6 +9,9 @@ uniform sampler2D textureNormals;
 uniform sampler2D textureAlbedo;
 uniform sampler2D textureMetalRough;
 
+uniform vec2 viewportSize;
+
+
 
 // Light parameters.
 // We always use vec4 to avoid common alignment bugs in the OpenGL drivers
@@ -26,9 +29,6 @@ struct Light {
 	// Attenuation: (constant, linear, quadratic).
 	vec4 attenuation;			// vec3
 };
-
-// TODO: Support multiple lights in a single pass?
-uniform Light light;
 
 
 // First elem is culling method, second is meta
@@ -212,9 +212,9 @@ Light getLightData(int idx) {
 
 // pos: vec3, radius float
 vec4 getBoundingSphere(Light light) {
-	const float thresh = 0.2f;
+	const float thresh = 0.02f;
 	// See computation in go_light.cpp
-	float color = length(light.color.rgb);
+	float color = max(max(light.color.r, light.color.g), light.color.b);
 	float atten = light.attenuation.z;
 	float rad = sqrt(color / (thresh * atten));
 	return vec4(light.positionType.xyz, rad);
@@ -225,11 +225,12 @@ vec4 getBoundingSphere(Light light) {
 
 void main() {
 
-	vec2 uv = fs_in.position.xy * 0.5 + 0.5;
-	vec3 position = texture(texturePos, fs_in.uv).xyz;
-	vec3 albedo = pow(texture(textureAlbedo, fs_in.uv).rgb, vec3(2.2));
-	vec2 metalRough = texture(textureMetalRough, fs_in.uv).xy;
-	vec3 normal = texture(textureNormals, fs_in.uv).xyz;
+	vec2 uv = (gl_FragCoord.xy - 0.5) / viewportSize;
+
+	vec3 position = texture(texturePos, uv).xyz;
+	vec3 albedo = pow(texture(textureAlbedo, uv).rgb, vec3(2.2));
+	vec2 metalRough = texture(textureMetalRough, uv).xy;
+	vec3 normal = texture(textureNormals, uv).xyz;
 
 	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
 
@@ -265,6 +266,18 @@ void main() {
 				normal
 			), 0.0);
 		}
+	}
+	else if (cullingMethod.x == 2) {
+		// RasterSphere
+		int lightIdx = cullingMethod.y;
+		color += vec4(processLight(
+			getLightData(lightIdx),
+			position,
+			albedo,
+			metalRough.x,
+			metalRough.y,
+			normal
+		), 0.0);
 	}
 	else {
 		color += vec4(1.0, 0.0, 1.0, 0.0);

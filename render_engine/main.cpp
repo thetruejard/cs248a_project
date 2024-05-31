@@ -25,9 +25,9 @@ using json = nlohmann::json;
 RenderEngine engine;
 
 
-void setupDemoScene(Scene* scene) {
+void setupDemoScene(Scene* scene, size_t num_lights) {
 
-    scene->backgroundColor = 0.1f * glm::vec3(0.5f, 0.6f, 1.0f); //1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
+    scene->backgroundColor = 0.2f * glm::vec3(0.5f, 0.6f, 1.0f); //1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
 
     std::cout << "Loading scene\n"; 
     Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/ship/ship.gltf");
@@ -61,7 +61,7 @@ void setupDemoScene(Scene* scene) {
     auto random = []() { return float(rand()) / float(RAND_MAX); };
     std::function<void(Ref<GameObject>)> dim_the_lights = [&dim_the_lights, &random](Ref<GameObject> root) {
         if (root->getTypeName() == "Light") {
-            constexpr float brightness = 0.005f; // 0.0001f
+            constexpr float brightness = 0.0005f; // 0.0001f
             auto L = root.cast<GO_Light>();
             L->color *= brightness;
             if (L->type == GO_Light::Type::Directional) {
@@ -77,8 +77,7 @@ void setupDemoScene(Scene* scene) {
     dim_the_lights(object);
 
 
-    size_t num_lights = 50;
-    bool make_atten_sphere = true;
+    bool make_atten_sphere = false;
     Ref<Material> s_mat = engine.createMaterial();
     s_mat->assignDiffuseColor(glm::vec4(1.0f, 1.0f, 1.0f , 1.0f));
     Ref<Mesh> sphere = engine.createMesh();
@@ -90,10 +89,10 @@ void setupDemoScene(Scene* scene) {
         Ref<GO_Mesh> mesh = engine.createObject<GO_Mesh>();
         mesh->assignMesh(sphere);
         mesh->setParent(light, false);
-        glm::vec3 pos = glm::vec3(20.0f * (2.0f * random() - 1.0f), 10.0f * random(), 20.0f * (2.0f * random() - 1.0f));
+        glm::vec3 pos = glm::vec3(10.0f * (2.0f * random() - 1.0f), 5.0f * random(), 10.0f * (2.0f * random() - 1.0f));
         light->setPosition(pos);
         glm::vec3 color = glm::normalize(glm::vec3(random(), random(), random()));
-        light->color = 1.0f * color;
+        light->color = 3.0f * color;
         scene->addObject(light);
         if (make_atten_sphere) {
             Sphere bs = light->getBoundingSphere();
@@ -106,7 +105,7 @@ void setupDemoScene(Scene* scene) {
             bs_mesh->assignMaterial(bs_mat);
             Ref<GO_Mesh> bs_obj = engine.createObject<GO_Mesh>();
             bs_obj->assignMesh(bs_mesh);
-            bs_obj->setParent(light, false);
+            bs_obj->setParent(light, true);     // Sphere is already at correct position, to adjust to fit
         }
     }
 
@@ -124,8 +123,8 @@ void argsError() {
 int main(int argc, char* argv[]) {
 
     RenderPipelineType pipeline = RenderPipelineType::Deferred;
-    std::string pipeline_name = "deferred-boundingsphere";
-    size_t lights = 100;
+    std::string pipeline_name = "deferred-rastersphere";
+    size_t num_lights = 10;
     std::filesystem::path log_file;
     bool interactive = true;
 
@@ -141,7 +140,7 @@ int main(int argc, char* argv[]) {
         if (args[i] == "--lights") {
             if (i == args.size()-1)
                 argsError();
-            lights = std::stoi(args[++i]);
+            num_lights = std::stoi(args[++i]);
         }
         else if (args[i] == "--pipeline") {
             if (++i == args.size())
@@ -184,7 +183,7 @@ int main(int argc, char* argv[]) {
     else if (pipeline_name == "deferred-boundingsphere")
         ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::BoundingSphere;
     else if (pipeline_name == "deferred-rastersphere")
-        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::RasterSphere;
     else if (pipeline_name == "forward-none")
         ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
     else if (pipeline_name == "forward-tile")
@@ -192,12 +191,12 @@ int main(int argc, char* argv[]) {
     else if (pipeline_name == "forward-cluster")
         ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
 
-    std::cout << "lights: " << lights << "\n";
+    std::cout << "lights: " << num_lights << "\n";
     std::cout << "pipeline: " << pipeline_name << "\n";
 
 
     Ref<Scene> scene = engine.createScene();
-    setupDemoScene(scene.get());
+    setupDemoScene(scene.get(), num_lights);
     engine.setActiveScene(scene);
 
     if (interactive) {

@@ -34,7 +34,9 @@ glm::vec3 GO_Light::getWorldSpaceDirection() {
 Sphere GO_Light::getBoundingSphere(float thresh) {
 	// A = color / (atten * r^2)
 	// r = sqrt(len(color) / (A * atten))
-	float color = glm::length(this->color);
+	float color = std::max(std::max(this->color.r, this->color.g), this->color.b);
 	float atten = this->attenuation.z;
-	return sqrt(color / (thresh * atten));
+	glm::mat modelMatrix = this->getModelMatrix();
+	glm::vec3 pos = modelMatrix[3];
+	return Sphere(sqrt(color / (thresh * atten)), pos);
 }

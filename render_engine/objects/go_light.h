@@ -38,6 +38,6 @@ public:
 	glm::vec3 getWorldSpaceDirection();
 
 	// ASSUMES QUADRATIC ATTENUATION
-	Sphere getBoundingSphere(float thresh = 0.2f);
+	Sphere getBoundingSphere(float thresh = 0.02f);
 
 };
