@@ -124,10 +124,14 @@ public:
 	void bind();
 
 	// Imports a shader program from a set of code files.
+	void read(std::filesystem::path vertPath);
+	// Imports a shader program from a set of code files.
 	void read(std::filesystem::path vertPath, std::filesystem::path fragPath);
 	// Imports a shader program from a set of code files.
 	void read(std::filesystem::path vertPath, std::filesystem::path geomPath, std::filesystem::path fragPath);
 
+	// Compiles a shader program from the given code blocks.
+	void compile(std::string vertCode);
 	// Compiles a shader program from the given code blocks.
 	void compile(std::string vertCode, std::string fragCode);
 	// Compiles a shader program from the given code blocks.

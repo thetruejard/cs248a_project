@@ -3,11 +3,23 @@
 layout (location = 0) out vec4 outColor;
 
 
-// gBuffer textures.
-uniform sampler2D texturePos;
-uniform sampler2D textureNormals;
-uniform sampler2D textureAlbedo;
-uniform sampler2D textureMetalRough;
+
+// The diffuse texture/color.
+uniform sampler2D textureDiffuse;
+uniform vec4 colorDiffuse;
+
+// The metalness texture/value.
+uniform sampler2D textureMetalness;
+uniform vec2 metalnessFac;		// first: value, second: active (1.0 if use value, 0.0 if use texture)
+
+// The roughness texture/value.
+uniform sampler2D textureRoughness;
+uniform vec2 roughnessFac;		// first: value, second: active (1.0 if use value, 0.0 if use texture)
+
+// The normal texture/flag.
+uniform sampler2D textureNormal;
+uniform int useNormalTex;
+
 
 uniform vec2 viewportSize;
 uniform vec3 numTiles;
@@ -52,6 +64,7 @@ const float PI = 3.14159265358979323;
 in attribs {
 	vec3 position;
 	vec2 uv;
+	mat3 TBN;
 } fs_in;
 
 
@@ -243,12 +256,42 @@ vec4 getBoundingSphere(Light light) {
 
 void main() {
 
-	vec2 uv = (gl_FragCoord.xy - 0.5) / viewportSize;
+	// MATERIALS
 
-	vec3 position = texture(texturePos, uv).xyz;
-	vec3 albedo = pow(texture(textureAlbedo, uv).rgb, vec3(2.2));
-	vec2 metalRough = texture(textureMetalRough, uv).xy;
-	vec3 normal = texture(textureNormals, uv).xyz;
+	// Sample the diffuse color.
+	vec3 albedo = mix(
+		texture(textureDiffuse, fs_in.uv).rgb,
+		colorDiffuse.rgb,
+		colorDiffuse.a
+	);
+
+	// Sample the metalness.
+	float metalness = mix(
+		texture(textureMetalness, fs_in.uv).r,
+		metalnessFac.r,
+		metalnessFac.g
+	);
+
+	// Sample the roughness.
+	float roughness = mix(
+		texture(textureRoughness, fs_in.uv).r,
+		roughnessFac.r,
+		roughnessFac.g
+	);
+
+	// Sample the normal.
+	vec3 normal;
+	if (useNormalTex == 1) {
+		vec3 normalMap = 2.0 * texture(textureNormal, fs_in.uv).xyz - 1.0;
+		normal = normalize(fs_in.TBN * normalMap);
+	}
+	else {
+		normal = normalize(fs_in.TBN[2]);		// TBN[2] == normal
+	}
+
+	
+	// LIGHTING
+
 
 	vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
 
@@ -257,10 +300,10 @@ void main() {
 		for (int i = 0; i < numLights.x; i++) {
 			color += vec4(processLight(
 				getLightData(i),
-				position,
+				fs_in.position,
 				albedo,
-				metalRough.x,
-				metalRough.y,
+				metalness,
+				roughness,
 				normal
 			), 0.0);
 		}
@@ -271,16 +314,16 @@ void main() {
 			Light l = getLightData(i);
 			vec4 boundingSphere = getBoundingSphere(l);
 			if (l.positionType.w == 2.0 &&
-				distance(position, boundingSphere.xyz) >= boundingSphere.w) {
+				distance(fs_in.position, boundingSphere.xyz) >= boundingSphere.w) {
 				// Outside the sphere, cull the light
 				continue;
 			}
 			color += vec4(processLight(
 				getLightData(i),
-				position,
+				fs_in.position,
 				albedo,
-				metalRough.x,
-				metalRough.y,
+				metalness,
+				roughness,
 				normal
 			), 0.0);
 		}
@@ -290,16 +333,16 @@ void main() {
 		int lightIdx = cullingMethod.y;
 		color += vec4(processLight(
 			getLightData(lightIdx),
-			position,
+			fs_in.position,
 			albedo,
-			metalRough.x,
-			metalRough.y,
+			metalness,
+				roughness,
 			normal
 		), 0.0);
 	}
 	else if (cullingMethod.x == 3) {
 		// Tiled
-		ivec2 tileCoord = ivec2(floor(uv * numTiles.xy));
+		ivec2 tileCoord = ivec2(floor(fs_in.uv * numTiles.xy));
 		int startIdx = tileLightMapping[2 * (tileCoord.y * int(numTiles.x) + tileCoord.x)];
 		int numIdxs =  tileLightMapping[2 * (tileCoord.y * int(numTiles.x) + tileCoord.x) + 1];
 		for (int i = 0; i < numIdxs; i++) {
@@ -307,12 +350,14 @@ void main() {
 			Light light = getLightData(lightIdx);
 			color += vec4(processLight(
 				light,
-				position,
+				fs_in.position,
 				albedo,
-				metalRough.x,
-				metalRough.y,
+				metalness,
+				roughness,
 				normal
 			), 0.0);
+			if (light.positionType.w == 2.0)
+				color += 0.01 * vec4(light.color.rgb, 0.0);
 		}
 	}
 	else {

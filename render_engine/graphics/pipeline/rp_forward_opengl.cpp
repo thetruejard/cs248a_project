@@ -1,4 +1,4 @@
-#include "graphics/pipeline/rp_deferred_opengl.h"
+#include "graphics/pipeline/rp_forward_opengl.h"
 #include "core/scene.h"
 #include "objects/gameobject.h"
 #include "objects/go_camera.h"
@@ -11,20 +11,16 @@
 
 
 
-RP_Deferred_OpenGL::RP_Deferred_OpenGL(Graphics& graphics) : RP_Deferred(graphics) {}
+RP_Forward_OpenGL::RP_Forward_OpenGL(Graphics& graphics) : RP_Forward(graphics) {}
 
 
-void RP_Deferred_OpenGL::init() {
+void RP_Forward_OpenGL::init() {
 
-	std::cout << "RP_Deferred_OpenGL::init()\n";
+	std::cout << "RP_Forward_OpenGL::init()\n";
 
-	this->gBufferShader.read(
-		"shaders/opengl/deferred_gbuffer.vert", 
-		"shaders/opengl/deferred_gbuffer.frag"
-	);
-	this->lightShader.read(
-		"shaders/opengl/deferred_light.vert",
-		"shaders/opengl/deferred_light.frag"
+	this->forwardShader.read(
+		"shaders/opengl/forward.vert",
+		"shaders/opengl/forward.frag"
 	);
 	this->rawShader.read(
 		"shaders/opengl/raw.vert",
@@ -34,92 +30,21 @@ void RP_Deferred_OpenGL::init() {
 		"shaders/opengl/post.vert",
 		"shaders/opengl/post.frag"
 	);
+	this->zprepassShader.read(
+		"shaders/opengl/zprepass.vert"
+	);
 }
 
-void RP_Deferred_OpenGL::resizeFramebuffer(size_t width, size_t height) {
+void RP_Forward_OpenGL::resizeFramebuffer(size_t width, size_t height) {
 
-	std::cout << "RP_Deferred_OpenGL::resizeFramebuffer(" << width << ", " << height << ")\n";
+	std::cout << "RP_Forward_OpenGL::resizeFramebuffer(" << width << ", " << height << ")\n";
 
 	if (this->width == (GLsizei)width && this->height == (GLsizei)height) {
 		return;
 	}
 
-	// Delete any existing gBuffer components.
-	if (glIsFramebuffer(this->gBuffer)) {
-		glDeleteFramebuffers(1, &this->gBuffer);
-	}
-	if (glIsTexture(this->gbPosTex)) {
-		glDeleteTextures(1, &this->gbPosTex);
-	}
-	if (glIsTexture(this->gbNormalTex)) {
-		glDeleteTextures(1, &this->gbNormalTex);
-	}
-	if (glIsTexture(this->gbAlbedoTex)) {
-		glDeleteTextures(1, &this->gbAlbedoTex);
-	}
-	if (glIsTexture(this->gbMetalRoughTex)) {
-		glDeleteTextures(1, &this->gbMetalRoughTex);
-	}
-	if (glIsRenderbuffer(this->gbDepthRB)) {
-		glDeleteRenderbuffers(1, &this->gbDepthRB);
-	}
-	
 	this->width = (GLsizei)width;
 	this->height = (GLsizei)height;
-
-	// Prepare the gBuffer.
-	glGenFramebuffers(1, &this->gBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, this->gBuffer);
-
-	// Position texture.
-	glGenTextures(1, &this->gbPosTex);
-	glBindTexture(GL_TEXTURE_2D, this->gbPosTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, this->width, this->height, 0, GL_RGB, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this->gbPosTex, 0);
-	
-	// Normal texture.
-	glGenTextures(1, &this->gbNormalTex);
-	glBindTexture(GL_TEXTURE_2D, this->gbNormalTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, this->width, this->height, 0, GL_RGB, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this->gbNormalTex, 0);
-
-	// Color texture.
-	glGenTextures(1, &this->gbAlbedoTex);
-	glBindTexture(GL_TEXTURE_2D, this->gbAlbedoTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, this->width, this->height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, this->gbAlbedoTex, 0);
-
-	// Metalness/Roughness texture.
-	glGenTextures(1, &this->gbMetalRoughTex);
-	glBindTexture(GL_TEXTURE_2D, this->gbMetalRoughTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, this->width, this->height, 0, GL_RG, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, this->gbMetalRoughTex, 0);
-
-	// Tell OpenGL which color attachments we'll use for rendering (specific to this framebuffer).
-	GLenum attachments[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
-	glDrawBuffers(4, attachments);
-
-	// Create and attach the depth buffer.
-	glGenRenderbuffers(1, &this->gbDepthRB);
-	glBindRenderbuffer(GL_RENDERBUFFER, this->gbDepthRB);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, this->width, this->height);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, this->gbDepthRB);
-
-	// Confirm completeness.
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-		std::cout << "Deferred renderer: Failed to initialize the gBuffer.\n";
-	}
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 
 	// TEMP: until a gamma solution
 
@@ -137,8 +62,14 @@ void RP_Deferred_OpenGL::resizeFramebuffer(size_t width, size_t height) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this->postTex, 0);
+
+	glGenRenderbuffers(1, &this->postDepthRB);
+	glBindRenderbuffer(GL_RENDERBUFFER, this->postDepthRB);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, this->width, this->height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, this->postDepthRB);
+
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-		std::cout << "Deferred renderer: Failed to initialize preGamma buffer.\n";
+		std::cout << "Forward renderer: Failed to initialize preGamma buffer.\n";
 	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -158,7 +89,7 @@ static void bindMaterial(Shader_OpenGL& shader, Ref<Material> material) {
 		}
 		// Metalness
 		shader.setUniform2f("metalnessFac", glm::vec2(material->getMetalness(),
-			1.0f-(float)bool(material->getMetalnessTexture())));
+			1.0f - (float)bool(material->getMetalnessTexture())));
 		if (material->getMetalnessTexture()) {
 			GPUTexture* gpuTex = material->getMetalnessTexture()->getGPUTexture();
 			shader.setUniformTex("textureMetalness",
@@ -220,16 +151,22 @@ static void renderSubtree(
 	}
 }
 
-void RP_Deferred_OpenGL::render(Scene* scene) {
+void RP_Forward_OpenGL::render(Scene* scene) {
 
-	// Pass 1: Render to gBuffer.
-	glBindFramebuffer(GL_FRAMEBUFFER, this->gBuffer);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glBindFramebuffer(GL_FRAMEBUFFER, this->postFBO);
+	// Correct the background color because with forward, it goes through the tone mapping
+	glm::vec3 bgd = scene->backgroundColor;
+	// y = (x / (x + 1)) ^ (1/2.2)
+	// x = (x+1)*y^2.2
+	// x(1-y^2.2) = y^2.2
+	// x = y^2.2 / (1-y^2.2)
+	bgd = glm::pow(bgd, glm::vec3(2.2f));
+	bgd = bgd / (1.0001f - bgd);
+	glClearColor(bgd.r, bgd.g, bgd.b, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
 
-	this->gBufferShader.bind();
 
 	Ref<GO_Camera> activeCamera = scene->getActiveCamera();
 	glm::mat4 viewMatrix;
@@ -243,157 +180,216 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 		projMatrix = glm::mat4(1.0f);
 	}
 
-	renderSubtree(this->gBufferShader, scene->getRoot().get(), viewMatrix, projMatrix);
 
+	this->zprepassShader.bind();
+	renderSubtree(this->zprepassShader, scene->getRoot().get(), viewMatrix, projMatrix);
 
-	// Pass 2: Render lights.
-	//this->lightShader.bind();
-	//this->lightShader.setUniform1f("specularShininess", 6.0f);
-	//this->lightShader.setUniform1f("specular", 1.0f);
-
-
-	glBindFramebuffer(GL_FRAMEBUFFER, this->postFBO);
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-	//this->rawShader.bind();
-	//this->rawShader.setUniformTex("textureMain", this->gbPosTex, 0);
-	//this->renderPrimitive(Rectangle(-1.0f, 0.0f, 1.0f, 1.0f), nullptr);
-	//this->rawShader.setUniformTex("textureMain", this->gbNormalTex, 0);
-	//this->renderPrimitive(Rectangle(0.0f, 0.0f, 1.0f, 1.0f), nullptr);
-	//this->rawShader.setUniformTex("textureMain", this->gbAlbedoTex, 0);
-	//this->renderPrimitive(Rectangle(-1.0f, -1.0f, 1.0f, 1.0f), nullptr);
-
-
-	this->lightShader.bind();
-	this->lightShader.setUniform2f("viewportSize", glm::vec2((float)this->width, (float)this->height));
-	this->lightShader.setUniform3f("numTiles", glm::vec3(this->numTiles));
-
-	// Fullscreen quad matrix.
-	glm::mat4 mat;
-	mat[0] = glm::vec4(2.0f, 0.0f, 0.0f, 0.0f);
-	mat[1] = glm::vec4(0.0f, 2.0f, 0.0f, 0.0f);
-	mat[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
-	mat[3] = glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f);
-	this->lightShader.setUniformMat4("mat", mat);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-	glDisable(GL_DEPTH_TEST);
-	glDepthMask(GL_FALSE);
-
-
-	this->lightShader.setUniformTex("texturePos", this->gbPosTex, 0);
-	this->lightShader.setUniformTex("textureNormals", this->gbNormalTex, 1);
-	this->lightShader.setUniformTex("textureAlbedo", this->gbAlbedoTex, 2);
-	this->lightShader.setUniformTex("textureMetalRough", this->gbMetalRoughTex, 3);
-
-	
+	this->forwardShader.bind();
+	this->forwardShader.setUniform2i("cullingMethod", glm::ivec2((GLint)this->culling, 0));
+	this->forwardShader.setUniform2f("viewportSize", glm::vec2((float)this->width, (float)this->height));
+	this->forwardShader.setUniform3f("numTiles", glm::vec3(this->numTiles));
 	this->updateLightsSSBO(scene, viewMatrix);
-
-
-	if (this->culling == LightCulling::TiledCPU) {
-		this->runTilesCPU(scene);
-	}
-	else if (this->culling == LightCulling::ClusteredCPU) {
-		this->runClustersCPU(scene);
-	}
-
-
-	if (this->culling != LightCulling::RasterSphere) {
-
-		this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)this->culling, 0));
-		this->thisGraphics->primitives.rectangle->draw();
-
-	}
-	else {
-		// Raster sphere
-		glEnable(GL_CULL_FACE);
-		glCullFace(GL_BACK);	// The sphere's faces point inwards, so cull the outside faces
-		// TODO: Make this a sphere
-		for (size_t i = 0; i < scene->lights.size(); i++) {
-			GO_Light* light = scene->lights[i];
-			// (method, light_index)
-			this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)LightCulling::RasterSphere, (GLint)i));
-			if (light->type == GO_Light::Type::Point) {
-				glDepthFunc(GL_GEQUAL);
-				glEnable(GL_DEPTH_TEST);
-				Sphere bs = light->getBoundingSphere();
-				// Rasterize spheres
-				glm::mat4 mat;
-				mat[0] = glm::vec4(bs.radius, 0.0f, 0.0f, 0.0f);
-				mat[1] = glm::vec4(0.0f, bs.radius, 0.0f, 0.0f);
-				mat[2] = glm::vec4(0.0f, 0.0f, bs.radius, 0.0f);
-				mat[3] = glm::vec4(bs.position, 1.0f);
-				mat = projMatrix * viewMatrix * mat;
-				this->lightShader.setUniformMat4("mat", mat);
-				this->thisGraphics->primitives.sphere->draw();
-				glDepthFunc(GL_LEQUAL);
-				glDisable(GL_DEPTH_TEST);
-			}
-			else {
-				// Other light type (i.e. sun), render every pixel
-				glDisable(GL_CULL_FACE);
-				glm::mat4 mat;
-				mat[0] = glm::vec4(2.0f, 0.0f, 0.0f, 0.0f);
-				mat[1] = glm::vec4(0.0f, 2.0f, 0.0f, 0.0f);
-				mat[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
-				mat[3] = glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f);
-				this->lightShader.setUniformMat4("mat", mat);
-				this->thisGraphics->primitives.rectangle->draw();
-				glEnable(GL_CULL_FACE);
-			}
-			
-		}
-		glDisable(GL_CULL_FACE);
-
-	}
-
+	glDepthMask(GL_FALSE);
+	renderSubtree(this->forwardShader, scene->getRoot().get(), viewMatrix, projMatrix);
 	glDepthMask(GL_TRUE);
 
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-	// TEMP: until a gamma solution
+
+	// Post stuff
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_BLEND);
 	this->postShader.bind();
 	this->postShader.setUniformTex("textureMain", this->postTex);
+	glm::mat4 mat;
 	mat[0] = glm::vec4(2.0f, 0.0f, 0.0f, 0.0f);
 	mat[1] = glm::vec4(0.0f, 2.0f, 0.0f, 0.0f);
 	mat[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 	mat[3] = glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f);
 	this->postShader.setUniformMat4("mat", mat);
-	//glEnable(GL_FRAMEBUFFER_SRGB);
 	this->thisGraphics->primitives.rectangle->draw();
-	//glDisable(GL_FRAMEBUFFER_SRGB);
-	// The rest of this is to make sure the background color is drawn.
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, this->gBuffer);
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-	glBlitFramebuffer(0, 0, this->width, this->height, 0, 0, this->width, this->height,
-		GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	mat[3] = glm::vec4(-1.0f, -1.0f, 1.0f, 1.0f);
-	this->rawShader.bind();
-	this->rawShader.setUniformMat4("mat", mat);
-	this->rawShader.setUniform4f("colorMain", glm::vec4(scene->backgroundColor, 1.0f));
-	glEnable(GL_DEPTH_TEST);
-	this->thisGraphics->primitives.rectangle->draw();
-
 
 	this->thisGraphics->swapBuffers();
+
+
+
+
+
+	return;
+
+	//// Pass 1: Render to gBuffer.
+	//glBindFramebuffer(GL_FRAMEBUFFER, this->gBuffer);
+	//glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//glEnable(GL_DEPTH_TEST);
+	//glDisable(GL_BLEND);
+	//
+	//this->gBufferShader.bind();
+	//
+	//Ref<GO_Camera> activeCamera = scene->getActiveCamera();
+	//glm::mat4 viewMatrix;
+	//glm::mat4 projMatrix;
+	//if (activeCamera) {
+	//	viewMatrix = activeCamera->getViewMatrix();
+	//	projMatrix = activeCamera->getProjectionMatrix();
+	//}
+	//else {
+	//	viewMatrix = glm::mat4(1.0f);
+	//	projMatrix = glm::mat4(1.0f);
+	//}
+	//
+	//renderSubtree(this->gBufferShader, scene->getRoot().get(), viewMatrix, projMatrix);
+	//
+	//
+	//// Pass 2: Render lights.
+	////this->lightShader.bind();
+	////this->lightShader.setUniform1f("specularShininess", 6.0f);
+	////this->lightShader.setUniform1f("specular", 1.0f);
+	//
+	//
+	//glBindFramebuffer(GL_FRAMEBUFFER, this->postFBO);
+	//glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	//glClear(GL_COLOR_BUFFER_BIT);
+	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	//
+	////this->rawShader.bind();
+	////this->rawShader.setUniformTex("textureMain", this->gbPosTex, 0);
+	////this->renderPrimitive(Rectangle(-1.0f, 0.0f, 1.0f, 1.0f), nullptr);
+	////this->rawShader.setUniformTex("textureMain", this->gbNormalTex, 0);
+	////this->renderPrimitive(Rectangle(0.0f, 0.0f, 1.0f, 1.0f), nullptr);
+	////this->rawShader.setUniformTex("textureMain", this->gbAlbedoTex, 0);
+	////this->renderPrimitive(Rectangle(-1.0f, -1.0f, 1.0f, 1.0f), nullptr);
+	//
+	//
+	//this->lightShader.bind();
+	//this->lightShader.setUniform2f("viewportSize", glm::vec2((float)this->width, (float)this->height));
+	//this->lightShader.setUniform3f("numTiles", glm::vec3(this->numTiles));
+	//
+	//// Fullscreen quad matrix.
+	//glm::mat4 mat;
+	//mat[0] = glm::vec4(2.0f, 0.0f, 0.0f, 0.0f);
+	//mat[1] = glm::vec4(0.0f, 2.0f, 0.0f, 0.0f);
+	//mat[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+	//mat[3] = glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f);
+	//this->lightShader.setUniformMat4("mat", mat);
+	//glEnable(GL_BLEND);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	//glDisable(GL_DEPTH_TEST);
+	//glDepthMask(GL_FALSE);
+	//
+	//
+	//this->lightShader.setUniformTex("texturePos", this->gbPosTex, 0);
+	//this->lightShader.setUniformTex("textureNormals", this->gbNormalTex, 1);
+	//this->lightShader.setUniformTex("textureAlbedo", this->gbAlbedoTex, 2);
+	//this->lightShader.setUniformTex("textureMetalRough", this->gbMetalRoughTex, 3);
+	//
+	//
+	//this->updateLightsSSBO(scene, viewMatrix);
+	//
+	//
+	//if (this->culling == LightCulling::TiledCPU) {
+	//	this->runTilesCPU(scene);
+	//}
+	//else if (this->culling == LightCulling::ClusteredCPU) {
+	//	this->runClustersCPU(scene);
+	//}
+	//
+	//
+	//if (this->culling != LightCulling::RasterSphere) {
+	//
+	//	this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)this->culling, 0));
+	//	this->thisGraphics->primitives.rectangle->draw();
+	//
+	//}
+	//else {
+	//	// Raster sphere
+	//	glEnable(GL_CULL_FACE);
+	//	glCullFace(GL_BACK);	// The sphere's faces point inwards, so cull the outside faces
+	//	// TODO: Make this a sphere
+	//	for (size_t i = 0; i < scene->lights.size(); i++) {
+	//		GO_Light* light = scene->lights[i];
+	//		// (method, light_index)
+	//		this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)LightCulling::RasterSphere, (GLint)i));
+	//		if (light->type == GO_Light::Type::Point) {
+	//			glDepthFunc(GL_GEQUAL);
+	//			glEnable(GL_DEPTH_TEST);
+	//			Sphere bs = light->getBoundingSphere();
+	//			// Rasterize spheres
+	//			glm::mat4 mat;
+	//			mat[0] = glm::vec4(bs.radius, 0.0f, 0.0f, 0.0f);
+	//			mat[1] = glm::vec4(0.0f, bs.radius, 0.0f, 0.0f);
+	//			mat[2] = glm::vec4(0.0f, 0.0f, bs.radius, 0.0f);
+	//			mat[3] = glm::vec4(bs.position, 1.0f);
+	//			mat = projMatrix * viewMatrix * mat;
+	//			this->lightShader.setUniformMat4("mat", mat);
+	//			this->thisGraphics->primitives.sphere->draw();
+	//			glDepthFunc(GL_LEQUAL);
+	//			glDisable(GL_DEPTH_TEST);
+	//		}
+	//		else {
+	//			// Other light type (i.e. sun), render every pixel
+	//			glDisable(GL_CULL_FACE);
+	//			glm::mat4 mat;
+	//			mat[0] = glm::vec4(2.0f, 0.0f, 0.0f, 0.0f);
+	//			mat[1] = glm::vec4(0.0f, 2.0f, 0.0f, 0.0f);
+	//			mat[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+	//			mat[3] = glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f);
+	//			this->lightShader.setUniformMat4("mat", mat);
+	//			this->thisGraphics->primitives.rectangle->draw();
+	//			glEnable(GL_CULL_FACE);
+	//		}
+	//
+	//	}
+	//	glDisable(GL_CULL_FACE);
+	//
+	//}
+	//
+	//glDepthMask(GL_TRUE);
+	//
+	//
+	//// TEMP: until a gamma solution
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//glDisable(GL_BLEND);
+	//this->postShader.bind();
+	//this->postShader.setUniformTex("textureMain", this->postTex);
+	//mat[0] = glm::vec4(2.0f, 0.0f, 0.0f, 0.0f);
+	//mat[1] = glm::vec4(0.0f, 2.0f, 0.0f, 0.0f);
+	//mat[2] = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+	//mat[3] = glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f);
+	//this->postShader.setUniformMat4("mat", mat);
+	////glEnable(GL_FRAMEBUFFER_SRGB);
+	//this->thisGraphics->primitives.rectangle->draw();
+	////glDisable(GL_FRAMEBUFFER_SRGB);
+	//// The rest of this is to make sure the background color is drawn.
+	//glBindFramebuffer(GL_READ_FRAMEBUFFER, this->gBuffer);
+	//glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	//glBlitFramebuffer(0, 0, this->width, this->height, 0, 0, this->width, this->height,
+	//	GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//mat[3] = glm::vec4(-1.0f, -1.0f, 1.0f, 1.0f);
+	//this->rawShader.bind();
+	//this->rawShader.setUniformMat4("mat", mat);
+	//this->rawShader.setUniform4f("colorMain", glm::vec4(scene->backgroundColor, 1.0f));
+	//glEnable(GL_DEPTH_TEST);
+	//this->thisGraphics->primitives.rectangle->draw();
+	//
+	//
+	//this->thisGraphics->swapBuffers();
 }
 
-void RP_Deferred_OpenGL::renderMesh(Mesh* mesh) {
+void RP_Forward_OpenGL::renderMesh(Mesh* mesh) {
 	GPUMesh* gpuMesh = mesh->getGPUMesh();
 	if (gpuMesh) {
 		if (mesh->getMaterial()) {
-			bindMaterial(this->gBufferShader, mesh->getMaterial());
+			bindMaterial(this->forwardShader, mesh->getMaterial());
 		}
 		gpuMesh->draw();
 	}
 }
 
-void RP_Deferred_OpenGL::renderPrimitive(
+void RP_Forward_OpenGL::renderPrimitive(
 	Rectangle rect, Ref<Material> material
 ) {
 	this->rawShader.bind();
@@ -436,7 +432,7 @@ struct SSBOLight {
 	glm::vec4 attenuation;			// vec3
 };
 
-void RP_Deferred_OpenGL::updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix) {
+void RP_Forward_OpenGL::updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix) {
 	if (!scene) return;
 	std::vector<GO_Light*>& lights = scene->lights;
 	if (this->lightsSSBO == 0 || this->lightsSSBONumLights != lights.size()) {
@@ -475,7 +471,19 @@ void RP_Deferred_OpenGL::updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix) {
 }
 
 
-void RP_Deferred_OpenGL::updateTileLightMappingSSBO() {
+
+
+
+
+
+
+// FOR LATER
+
+
+
+
+
+void RP_Forward_OpenGL::updateTileLightMappingSSBO() {
 	if (this->tileLightMappingSSBO == 0 || this->tileLightMappingRes != this->numTiles) {
 		if (this->tileLightMappingSSBO != 0)
 			glDeleteBuffers(1, &this->tileLightMappingSSBO);
@@ -501,7 +509,7 @@ void RP_Deferred_OpenGL::updateTileLightMappingSSBO() {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
-void RP_Deferred_OpenGL::updateLightsIndexSSBO() {
+void RP_Forward_OpenGL::updateLightsIndexSSBO() {
 	size_t neededSize;
 	if (this->culling == LightCulling::TiledCPU || this->culling == LightCulling::ClusteredCPU)
 		neededSize = sizeof(GLint) * this->lightsIndex.size();
@@ -529,31 +537,6 @@ void RP_Deferred_OpenGL::updateLightsIndexSSBO() {
 
 
 
-/*
-struct Frustum {
-	glm::vec3 nearPlaneNormal;
-	float nearPlaneDistance;
-	glm::vec3 farPlaneNormal;
-	float farPlaneDistance;
-
-	Frustum(const glm::mat4& projectionMatrix) {
-		glm::vec3 e1, e2, e3;
-		glm::mat4 inverseMatrix = glm::inverse(projectionMatrix);
-
-		e1 = glm::vec3(inverseMatrix[3] + inverseMatrix[0], 0.0f, 0.0f) / inverseMatrix[2];
-		e2 = glm::vec3(0.0f, inverseMatrix[3] + inverseMatrix[5], 0.0f) / inverseMatrix[7];
-		e3 = glm::vec3(inverseMatrix[3] + inverseMatrix[10], inverseMatrix[3] + inverseMatrix[11], 0.0f) / inverseMatrix[14];
-
-		nearPlaneNormal = glm::normalize(glm::cross(e3, e2));
-		nearPlaneDistance = -glm::dot(nearPlaneNormal, inverseMatrix[3]);
-
-		farPlaneNormal = glm::normalize(glm::cross(e3, -e2));
-		farPlaneDistance = -glm::dot(farPlaneNormal, inverseMatrix[3]);
-	}
-};*/
-
-
-
 static bool lightIntersectsFrustum(GO_Camera* camera, const Sphere& bs, float w,
 	glm::vec4 leftBottomRightTop, glm::vec2 nearFar) {
 	if (bs.position.z + bs.radius / w < nearFar.x || bs.position.z - bs.radius / w > nearFar.y) {
@@ -576,12 +559,12 @@ static bool lightIntersectsFrustum(GO_Camera* camera, const Sphere& bs, float w,
 		lbrt.z <= leftBottomRightTop.x ||
 		lbrt.y >= leftBottomRightTop.w ||
 		lbrt.w <= leftBottomRightTop.y
-	);
+		);
 }
 
 
 
-void RP_Deferred_OpenGL::runTilesCPU(Scene* scene) {
+void RP_Forward_OpenGL::runTilesCPU(Scene* scene) {
 	GO_Camera* camera = scene->getActiveCamera().get();
 	if (camera == nullptr) {
 		return;
@@ -639,12 +622,12 @@ void RP_Deferred_OpenGL::runTilesCPU(Scene* scene) {
 
 		}
 	}
-	
+
 	this->updateTileLightMappingSSBO();
 	this->updateLightsIndexSSBO();
 
 }
 
-void RP_Deferred_OpenGL::runClustersCPU(Scene* scene) {
+void RP_Forward_OpenGL::runClustersCPU(Scene* scene) {
 
 }

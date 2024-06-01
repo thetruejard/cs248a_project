@@ -17,6 +17,7 @@ enum class RenderPipelineType {
 	Clay,
 	Temp,
 	Deferred,
+	Forward,
 };
 inline constexpr RenderPipelineType DefaultRenderPipeline = RenderPipelineType::Deferred;
 

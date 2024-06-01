@@ -11,6 +11,7 @@
 #include "utils/printutils.h"
 
 #include "graphics/pipeline/rp_deferred_opengl.h"
+#include "graphics/pipeline/rp_forward_opengl.h"
 
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
@@ -123,10 +124,10 @@ void argsError() {
 int main(int argc, char* argv[]) {
 
     RenderPipelineType pipeline = RenderPipelineType::Deferred;
-    std::string pipeline_name = "deferred-tiled-cpu";
+    std::string pipeline_name = "deferred-rastersphere";
     glm::ivec3 numTiles = glm::ivec3(80, 45, 32);
     GLint maxLightsPerTile = 64;
-    size_t num_lights = 1;
+    size_t num_lights = 100;
     std::filesystem::path log_file;
     bool interactive = true;
 
@@ -151,13 +152,18 @@ int main(int argc, char* argv[]) {
                 args[i] == "deferred-boundingsphere" ||
                 args[i] == "deferred-rastersphere" ||
                 args[i] == "deferred-tiled-cpu" ||
-                args[i] == "deferred-clustered-cpu") {
+                args[i] == "deferred-clustered-cpu" ||
+                args[i] == "deferred-tiled-gpu" ||
+                args[i] == "deferred-clustered-gpu") {
                 pipeline = RenderPipelineType::Deferred;
             }
             else if (args[i] == "forward-none" ||
+                args[i] == "forward-boundingsphere" ||
                 args[i] == "forward-tiled-cpu" ||
-                args[i] == "forward-clustered-cpu") {
-                pipeline = RenderPipelineType::Deferred;
+                args[i] == "forward-clustered-cpu" ||
+                args[i] == "forward-tiled-gpu" ||
+                args[i] == "forward-clustered-gpu") {
+                pipeline = RenderPipelineType::Forward;
             }
             else argsError();
             pipeline_name = args[i];
@@ -213,12 +219,43 @@ int main(int argc, char* argv[]) {
         ((RP_Deferred_OpenGL*)gpipeline)->numTiles = numTiles;
         ((RP_Deferred_OpenGL*)gpipeline)->maxLightsPerTile = maxLightsPerTile;
     }
+    else if (pipeline_name == "deferred-tiled-gpu") {
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::TiledGPU;
+        numTiles.z = 1;     // IMPORTANT.
+        ((RP_Deferred_OpenGL*)gpipeline)->numTiles = numTiles;
+        ((RP_Deferred_OpenGL*)gpipeline)->maxLightsPerTile = maxLightsPerTile;
+    }
+    else if (pipeline_name == "deferred-clustered-gpu") {
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::ClusteredGPU;
+        ((RP_Deferred_OpenGL*)gpipeline)->numTiles = numTiles;
+        ((RP_Deferred_OpenGL*)gpipeline)->maxLightsPerTile = maxLightsPerTile;
+    }
     else if (pipeline_name == "forward-none")
-        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
-    else if (pipeline_name == "forward-tiled-cpu")
-        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
-    else if (pipeline_name == "forward-clustered-cpu")
-        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
+        ((RP_Forward_OpenGL*)gpipeline)->culling = RP_Forward_OpenGL::LightCulling::None;
+    else if (pipeline_name == "forward-boundingsphere")
+        ((RP_Forward_OpenGL*)gpipeline)->culling = RP_Forward_OpenGL::LightCulling::BoundingSphere;
+    else if (pipeline_name == "forward-tiled-cpu") {
+        ((RP_Forward_OpenGL*)gpipeline)->culling = RP_Forward_OpenGL::LightCulling::TiledCPU;
+        numTiles.z = 1;     // IMPORTANT.
+        ((RP_Forward_OpenGL*)gpipeline)->numTiles = numTiles;
+        ((RP_Forward_OpenGL*)gpipeline)->maxLightsPerTile = maxLightsPerTile;
+    }
+    else if (pipeline_name == "forward-clustered-cpu") {
+        ((RP_Forward_OpenGL*)gpipeline)->culling = RP_Forward_OpenGL::LightCulling::ClusteredCPU;
+        ((RP_Forward_OpenGL*)gpipeline)->numTiles = numTiles;
+        ((RP_Forward_OpenGL*)gpipeline)->maxLightsPerTile = maxLightsPerTile;
+    }
+    else if (pipeline_name == "forward-tiled-gpu") {
+        ((RP_Forward_OpenGL*)gpipeline)->culling = RP_Forward_OpenGL::LightCulling::TiledGPU;
+        numTiles.z = 1;     // IMPORTANT.
+        ((RP_Forward_OpenGL*)gpipeline)->numTiles = numTiles;
+        ((RP_Forward_OpenGL*)gpipeline)->maxLightsPerTile = maxLightsPerTile;
+    }
+    else if (pipeline_name == "forward-clustered-gpu") {
+        ((RP_Forward_OpenGL*)gpipeline)->culling = RP_Forward_OpenGL::LightCulling::ClusteredGPU;
+        ((RP_Forward_OpenGL*)gpipeline)->numTiles = numTiles;
+        ((RP_Forward_OpenGL*)gpipeline)->maxLightsPerTile = maxLightsPerTile;
+    }
 
     std::cout << "lights: " << num_lights << "\n";
     std::cout << "pipeline: " << pipeline_name << "\n";

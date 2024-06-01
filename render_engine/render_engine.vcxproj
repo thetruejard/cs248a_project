@@ -161,6 +161,8 @@
     <ClCompile Include="graphics\material.cpp" />
     <ClCompile Include="graphics\pipeline\rp_deferred.cpp" />
     <ClCompile Include="graphics\pipeline\rp_deferred_opengl.cpp" />
+    <ClCompile Include="graphics\pipeline\rp_forward.cpp" />
+    <ClCompile Include="graphics\pipeline\rp_forward_opengl.cpp" />
     <ClCompile Include="graphics\pipeline\rp_temp.cpp" />
     <ClCompile Include="graphics\pipeline\rp_temp_opengl.cpp" />
     <ClCompile Include="graphics\texture.cpp" />
@@ -212,6 +214,8 @@
     <ClInclude Include="graphics\material.h" />
     <ClInclude Include="graphics\pipeline\rp_deferred.h" />
     <ClInclude Include="graphics\pipeline\rp_deferred_opengl.h" />
+    <ClInclude Include="graphics\pipeline\rp_forward.h" />
+    <ClInclude Include="graphics\pipeline\rp_forward_opengl.h" />
     <ClInclude Include="graphics\pipeline\rp_temp.h" />
     <ClInclude Include="graphics\pipeline\rp_temp_opengl.h" />
     <ClInclude Include="objects\go_light.h" />
@@ -242,12 +246,15 @@
     <None Include="shaders\opengl\deferred_gbuffer.vert" />
     <None Include="shaders\opengl\deferred_light.frag" />
     <None Include="shaders\opengl\deferred_light.vert" />
+    <None Include="shaders\opengl\forward.frag" />
+    <None Include="shaders\opengl\forward.vert" />
     <None Include="shaders\opengl\post.frag" />
     <None Include="shaders\opengl\post.vert" />
     <None Include="shaders\opengl\raw.frag" />
     <None Include="shaders\opengl\raw.vert" />
     <None Include="shaders\opengl\temp.frag" />
     <None Include="shaders\opengl\temp.vert" />
+    <None Include="shaders\opengl\zprepass.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

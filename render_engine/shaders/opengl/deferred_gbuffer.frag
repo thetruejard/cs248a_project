@@ -25,15 +25,7 @@ uniform int useNormalTex;
 
 
 
-// Position of the camera.
-uniform vec3 cameraPos;
-// The (normalized) direction the camera is facing.
-uniform vec3 cameraDir;
 
-// The shininess of the specular component of the material.
-uniform float specularShininess;
-// How much the specular component contributes to the final color.
-uniform float specular;
 
 // This is the data we're receiving from the vertex shader..
 // "attribs" is the name of the data block (must match in vert shader).
@@ -80,8 +72,6 @@ void main() {
 	else {
 		normal = normalize(fs_in.normal);
 	}
-
-	// TODO: Support normal mapping.
 	
 	outPosition = fs_in.position;
 	outNormals = normal;

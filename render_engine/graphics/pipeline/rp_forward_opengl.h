@@ -1,13 +1,13 @@
 #pragma once
-#include "graphics/pipeline/rp_deferred.h"
+#include "graphics/pipeline/rp_forward.h"
 #include "graphics/graphics_opengl.h"
 #include "geometry/sphere.h"
 
 
-class RP_Deferred_OpenGL : public RP_Deferred {
+class RP_Forward_OpenGL : public RP_Forward {
 public:
 
-	RP_Deferred_OpenGL(Graphics& graphics);
+	RP_Forward_OpenGL(Graphics& graphics);
 
 	virtual void init();
 
@@ -21,11 +21,10 @@ public:
 		Ref<Material> material) override;
 
 
-	// Indices should align with values in deferred_light.frag.
+	// Indices should align with values in forward.frag.
 	enum class LightCulling : GLint {
 		None = 0,
 		BoundingSphere = 1,
-		RasterSphere = 2,
 		TiledCPU = 3,
 		ClusteredCPU = 4,
 		TiledGPU = 5,
@@ -39,28 +38,28 @@ public:
 
 private:
 
-	Shader_OpenGL gBufferShader;
-	Shader_OpenGL lightShader;
+	Shader_OpenGL forwardShader;
 	Shader_OpenGL rawShader;
 	Shader_OpenGL postShader;
+	Shader_OpenGL zprepassShader;
 
 	GLsizei width = 0;
 	GLsizei height = 0;
 
-	GLuint gBuffer = 0;
-	GLuint gbAlbedoTex = 0;
-	GLuint gbPosTex = 0;
-	GLuint gbNormalTex = 0;
-	GLuint gbMetalRoughTex = 0;
-	GLuint gbDepthRB = 0;
 
 	GLuint postFBO = 0;
 	GLuint postTex = 0;
+	GLuint postDepthRB = 0;
 
 	GLuint lightsSSBO = 0;
 	size_t lightsSSBONumLights = 0;
 	static constexpr GLuint lightsSSBOBinding = 0;		// Must align with deferred_light.frag
 	void updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix);
+
+
+
+
+	// TODO: FOR LATER
 
 	// The SSBO storing mappings to ranges in lightsIndexSSBO (2 values per cluster, pos and len)
 	GLuint tileLightMappingSSBO = 0;

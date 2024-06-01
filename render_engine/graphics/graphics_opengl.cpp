@@ -2,6 +2,7 @@
 #include "graphics/pipeline/rp_clay_opengl.h"
 #include "graphics/pipeline/rp_temp_opengl.h"
 #include "graphics/pipeline/rp_deferred_opengl.h"
+#include "graphics/pipeline/rp_forward_opengl.h"
 #include "io/callbacks_glfw.h"
 
 #include <sstream>
@@ -70,6 +71,9 @@ void Graphics_OpenGL::setRenderPipeline(RenderPipelineType pipelineType) {
 		break;
 	case RenderPipelineType::Deferred:
 		this->pipeline = new RP_Deferred_OpenGL(*this);
+		break;
+	case RenderPipelineType::Forward:
+		this->pipeline = new RP_Forward_OpenGL(*this);
 		break;
 	default:
 		this->pipeline = nullptr;
@@ -337,6 +341,22 @@ void Shader_OpenGL::bind() {
 	glUseProgram(this->programID);
 }
 
+
+void Shader_OpenGL::read(std::filesystem::path vertPath) {
+	std::stringstream vertcode;
+	std::string line;
+	std::ifstream file;
+
+	file.open(vertPath);
+	if (!file.is_open()) {
+		MessageBoxA(NULL, "Could not find file", "Vert Shader", MB_OK | MB_ICONERROR);
+	}
+	while (std::getline(file, line)) {
+		vertcode << line << "\n";
+	}
+	file.close();
+	this->compile(vertcode.str());
+}
 void Shader_OpenGL::read(std::filesystem::path vertPath, std::filesystem::path fragPath) {
 	std::stringstream vertcode;
 	std::stringstream fragcode;
@@ -395,6 +415,25 @@ void Shader_OpenGL::read(std::filesystem::path vertPath, std::filesystem::path g
 	this->compile(vertcode.str(), geomcode.str(), fragcode.str());
 }
 
+
+void Shader_OpenGL::compile(std::string vertCode) {
+	this->clear();
+	GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+	// We must extract the pointers so we can pass a multi-dim array.
+	const char* vc = vertCode.c_str();
+	glShaderSource(vs, 1, &vc, NULL);
+	glCompileShader(vs);
+	bool success = this->checkShaderErrors(vs, "Vertex Shader");
+	if (success) {
+		this->programID = glCreateProgram();
+		glAttachShader(this->programID, vs);
+		glLinkProgram(this->programID);
+	}
+	else {
+		this->programID = 0;
+	}
+	glDeleteShader(vs);
+}
 void Shader_OpenGL::compile(std::string vertCode, std::string fragCode) {
 	this->clear();
 	GLuint vs = glCreateShader(GL_VERTEX_SHADER);
