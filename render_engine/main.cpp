@@ -65,7 +65,7 @@ void setupDemoScene(Scene* scene, size_t num_lights) {
             auto L = root.cast<GO_Light>();
             L->color *= brightness;
             if (L->type == GO_Light::Type::Directional) {
-                L->color *= 0.0f;
+                L->color *= 1.0f;
             }
             std::cout << "LIGHT: " << root->getName() << " | ";
             Utils::Print::vec3(root.cast<GO_Light>()->color);
@@ -123,8 +123,10 @@ void argsError() {
 int main(int argc, char* argv[]) {
 
     RenderPipelineType pipeline = RenderPipelineType::Deferred;
-    std::string pipeline_name = "deferred-rastersphere";
-    size_t num_lights = 10;
+    std::string pipeline_name = "deferred-tiled-cpu";
+    glm::ivec3 numTiles = glm::ivec3(80, 45, 32);
+    GLint maxLightsPerTile = 64;
+    size_t num_lights = 1;
     std::filesystem::path log_file;
     bool interactive = true;
 
@@ -136,7 +138,7 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         args.push_back(argv[i]);
     }
-    for (int i = 0; i < args.size(); i++) {
+    for (size_t i = 0; i < args.size(); i++) {
         if (args[i] == "--lights") {
             if (i == args.size()-1)
                 argsError();
@@ -145,20 +147,36 @@ int main(int argc, char* argv[]) {
         else if (args[i] == "--pipeline") {
             if (++i == args.size())
                 argsError();
-            if (args[i] == "deferred-none")
+            if (args[i] == "deferred-none" ||
+                args[i] == "deferred-boundingsphere" ||
+                args[i] == "deferred-rastersphere" ||
+                args[i] == "deferred-tiled-cpu" ||
+                args[i] == "deferred-clustered-cpu") {
                 pipeline = RenderPipelineType::Deferred;
-            else if (args[i] == "deferred-boundingsphere")
+            }
+            else if (args[i] == "forward-none" ||
+                args[i] == "forward-tiled-cpu" ||
+                args[i] == "forward-clustered-cpu") {
                 pipeline = RenderPipelineType::Deferred;
-            else if (args[i] == "deferred-rastersphere")
-                pipeline = RenderPipelineType::Deferred;
-            else if (args[i] == "forward-none")
-                pipeline = RenderPipelineType::Deferred;
-            else if (args[i] == "forward-tile")
-                pipeline = RenderPipelineType::Deferred;
-            else if (args[i] == "forward-cluster")
-                pipeline = RenderPipelineType::Deferred;
+            }
             else argsError();
             pipeline_name = args[i];
+        }
+        else if (args[i] == "--numTiles") {
+            if (i + 2 >= args.size())
+                argsError();
+            numTiles.x = (GLint)std::stoi(args[++i]);
+            numTiles.y = (GLint)std::stoi(args[++i]);
+        }
+        else if (args[i] == "--numClustersZ") {
+            if (++i == args.size())
+                argsError();
+            numTiles.z = (GLint)std::stoi(args[i]);
+        }
+        else if (args[i] == "--maxLightsPerTile") {
+            if (++i == args.size())
+                argsError();
+            maxLightsPerTile = (GLint)std::stoi(args[i]);
         }
         else if (args[i] == "--log-file") {
             if (++i == args.size())
@@ -184,11 +202,22 @@ int main(int argc, char* argv[]) {
         ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::BoundingSphere;
     else if (pipeline_name == "deferred-rastersphere")
         ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::RasterSphere;
+    else if (pipeline_name == "deferred-tiled-cpu") {
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::TiledCPU;
+        numTiles.z = 1;     // IMPORTANT.
+        ((RP_Deferred_OpenGL*)gpipeline)->numTiles = numTiles;
+        ((RP_Deferred_OpenGL*)gpipeline)->maxLightsPerTile = maxLightsPerTile;
+    }
+    else if (pipeline_name == "deferred-clustered-cpu") {
+        ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::ClusteredCPU;
+        ((RP_Deferred_OpenGL*)gpipeline)->numTiles = numTiles;
+        ((RP_Deferred_OpenGL*)gpipeline)->maxLightsPerTile = maxLightsPerTile;
+    }
     else if (pipeline_name == "forward-none")
         ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
-    else if (pipeline_name == "forward-tile")
+    else if (pipeline_name == "forward-tiled-cpu")
         ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
-    else if (pipeline_name == "forward-cluster")
+    else if (pipeline_name == "forward-clustered-cpu")
         ((RP_Deferred_OpenGL*)gpipeline)->culling = RP_Deferred_OpenGL::LightCulling::None;
 
     std::cout << "lights: " << num_lights << "\n";

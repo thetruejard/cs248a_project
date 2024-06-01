@@ -3,7 +3,6 @@
 #include "objects/gameobject.h"
 #include "objects/go_camera.h"
 #include "utils/printutils.h"
-#include "geometry/sphere.h"
 
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/gtc/matrix_transform.hpp"
@@ -269,6 +268,7 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 
 	this->lightShader.bind();
 	this->lightShader.setUniform2f("viewportSize", glm::vec2((float)this->width, (float)this->height));
+	this->lightShader.setUniform3f("numTiles", glm::vec3(this->numTiles));
 
 	// Fullscreen quad matrix.
 	glm::mat4 mat;
@@ -288,10 +288,17 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 	this->lightShader.setUniformTex("textureAlbedo", this->gbAlbedoTex, 2);
 	this->lightShader.setUniformTex("textureMetalRough", this->gbMetalRoughTex, 3);
 
-	// TODO: based on culling method, use SSBO instead of the following
-	// updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix)
 	
 	this->updateLightsSSBO(scene, viewMatrix);
+
+
+	if (this->culling == LightCulling::TiledCPU) {
+		this->runTilesCPU(scene);
+	}
+	else if (this->culling == LightCulling::ClusteredCPU) {
+		this->runClustersCPU(scene);
+	}
+
 
 	if (this->culling != LightCulling::RasterSphere) {
 
@@ -309,6 +316,8 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 			// (method, light_index)
 			this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)LightCulling::RasterSphere, (GLint)i));
 			if (light->type == GO_Light::Type::Point) {
+				glDepthFunc(GL_GEQUAL);
+				glEnable(GL_DEPTH_TEST);
 				Sphere bs = light->getBoundingSphere();
 				// Rasterize spheres
 				glm::mat4 mat;
@@ -319,6 +328,8 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 				mat = projMatrix * viewMatrix * mat;
 				this->lightShader.setUniformMat4("mat", mat);
 				this->thisGraphics->primitives.sphere->draw();
+				glDepthFunc(GL_LEQUAL);
+				glDisable(GL_DEPTH_TEST);
 			}
 			else {
 				// Other light type (i.e. sun), render every pixel
@@ -462,4 +473,154 @@ void RP_Deferred_OpenGL::updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix) {
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, (GLintptr)0, (GLsizeiptr)len, buf);
 	delete[] buf;
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
+
+void RP_Deferred_OpenGL::updateTileLightMappingSSBO() {
+	if (this->tileLightMappingSSBO == 0 || this->tileLightMappingRes != this->numTiles) {
+		if (this->tileLightMappingSSBO != 0)
+			glDeleteBuffers(1, &this->tileLightMappingSSBO);
+		glGenBuffers(1, &this->tileLightMappingSSBO);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->tileLightMappingSSBO);
+		GLsizeiptr size = sizeof(GLint) * this->numTiles.x * this->numTiles.y * this->numTiles.z * 2;
+		glBufferData(GL_SHADER_STORAGE_BUFFER, size, (void*)0, GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, this->tileLightMappingSSBOBinding, this->tileLightMappingSSBO);
+		this->tileLightMappingRes = this->numTiles;
+		std::cout << "REALLOCATING tileLightMapping\n";
+	}
+	else {
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->tileLightMappingSSBO);
+	}
+	if ((GLint)this->tileLightMapping.size() != this->numTiles.x * this->numTiles.y * this->numTiles.z * 2) {
+		std::cout << "TILE LIGHT MAPPING MISMATCH: " << this->tileLightMapping.size() << " | " <<
+			this->numTiles.x << "," << this->numTiles.y << "," << this->numTiles.z << "\n";
+		return;
+	}
+	if (this->culling == LightCulling::TiledCPU || this->culling == LightCulling::ClusteredCPU)
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, (GLintptr)0,
+			(GLsizeiptr)(sizeof(GLint) * this->tileLightMapping.size()), this->tileLightMapping.data());
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
+void RP_Deferred_OpenGL::updateLightsIndexSSBO() {
+	size_t neededSize;
+	if (this->culling == LightCulling::TiledCPU || this->culling == LightCulling::ClusteredCPU)
+		neededSize = sizeof(GLint) * this->lightsIndex.size();
+	else
+		neededSize = 0;		// TODO: GPU
+	if (this->lightsIndexSSBO == 0 || this->lightsIndexSSBOSize < neededSize) {
+		if (this->lightsIndexSSBO != 0)
+			glDeleteBuffers(1, &this->lightsIndexSSBO);
+		glGenBuffers(1, &this->lightsIndexSSBO);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->lightsIndexSSBO);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, (GLsizeiptr)neededSize, (void*)0, GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, this->lightsIndexSSBOBinding, this->lightsIndexSSBO);
+		this->lightsIndexSSBOSize = neededSize;
+		std::cout << "REALLOCATING lightsIndex (" << this->lightsIndexSSBO << ") with size " << neededSize << "\n";
+	}
+	else {
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->lightsIndexSSBO);
+	}
+	if (this->culling == LightCulling::TiledCPU || this->culling == LightCulling::ClusteredCPU) {
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, (GLintptr)0,
+			(GLsizeiptr)(sizeof(GLint) * this->lightsIndex.size()), this->lightsIndex.data());
+	}
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
+
+
+static bool lightIntersectsFrustum(GO_Camera* camera, const Sphere& bs, float w,
+	glm::vec4 leftBottomRightTop, glm::vec2 nearFar) {
+	if (bs.position.z + bs.radius / w < nearFar.x || bs.position.z - bs.radius / w > nearFar.y) {
+		return false;
+	}
+	glm::vec2 radius2D = glm::vec2(
+		camera->projectionParams.perspective.aspect, 1.0f)
+		* bs.radius / w;
+	//return true;
+	glm::vec2 pos2D = glm::vec2(bs.position) / w;
+	//pos2D = 0.5f * pos2D + 0.5f;
+	//float screen_height = 2.0f * tan(camera->projectionParams.perspective.fovy / 2.0f);
+	//float screen_width = screen_height * camera->projectionParams.perspective.aspect;
+	//glm::vec2 wndSizeAtDepth = viewSpacePos.z * glm::vec2(screen_width, screen_height);
+	//glm::vec2 radius2D = glm::vec2(bs.radius) / wndSizeAtDepth;
+	//// Just do 2D bounding box comparison
+	glm::vec4 lbrt = glm::vec4(pos2D.x - radius2D.x, pos2D.y - radius2D.y, pos2D.x + radius2D.x, pos2D.y + radius2D.y);
+	return !(
+		lbrt.x >= leftBottomRightTop.z ||
+		lbrt.z <= leftBottomRightTop.x ||
+		lbrt.y >= leftBottomRightTop.w ||
+		lbrt.w <= leftBottomRightTop.y
+	);
+}
+
+
+
+void RP_Deferred_OpenGL::runTilesCPU(Scene* scene) {
+	GO_Camera* camera = scene->getActiveCamera().get();
+	if (camera == nullptr) {
+		return;
+	}
+	if (tileLightMapping.size() != (size_t)this->numTiles.x * this->numTiles.y * 2)
+		tileLightMapping.resize((size_t)this->numTiles.x * this->numTiles.y * 2);
+	this->lightsIndex.clear();
+
+	std::vector<GLint> tileLights;
+	tileLights.reserve(this->maxLightsPerTile);
+
+	glm::vec2 nearFar = glm::vec2(
+		camera->projectionParams.perspective.near,
+		camera->projectionParams.perspective.far
+	);
+
+	lightVolumes.clear();
+	for (GO_Light* light : scene->lights) {
+		Sphere s;
+		s = light->getBoundingSphere();
+		glm::vec4 p = camera->getProjectionMatrix() * camera->getViewMatrix() * glm::vec4(s.position, 1.0f);
+		s.position = glm::vec3(p);
+		lightVolumes.push_back(std::pair<Sphere, float>(s, p.w));
+	}
+
+	// For each tile
+	for (size_t y = 0; y < this->numTiles.y; y++) {
+		for (size_t x = 0; x < this->numTiles.x; x++) {
+
+			glm::vec4 tileBounds = glm::vec4(
+				(float)x / (float)this->numTiles.x,
+				(float)y / (float)this->numTiles.y,
+				(float)(x + 1) / (float)this->numTiles.x,
+				(float)(y + 1) / (float)this->numTiles.y
+			);
+			tileLights.clear();
+
+			// For each light
+			for (GLint i = 0; i < (GLint)scene->lights.size(); i++) {
+				GO_Light* light = scene->lights[i];
+
+				// Detect if light intersects tile:
+				auto lv = lightVolumes[i];
+				if (light->type != GO_Light::Type::Point ||
+					lightIntersectsFrustum(camera, lv.first, lv.second, tileBounds, nearFar)) {
+					tileLights.push_back(i);
+				}
+
+			}
+
+			// Append the tile's lights to the global list and record indices.
+			this->tileLightMapping[2 * (y * this->numTiles.x + x)] = (GLint)this->lightsIndex.size();
+			this->tileLightMapping[2 * (y * this->numTiles.x + x) + 1] = (GLint)tileLights.size();
+			this->lightsIndex.insert(this->lightsIndex.end(), tileLights.begin(), tileLights.end());
+
+		}
+	}
+	
+	this->updateTileLightMappingSSBO();
+	this->updateLightsIndexSSBO();
+
+}
+
+void RP_Deferred_OpenGL::runClustersCPU(Scene* scene) {
+
 }

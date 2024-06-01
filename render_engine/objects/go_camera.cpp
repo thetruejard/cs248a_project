@@ -61,6 +61,7 @@ void GO_Camera::setPerspective(float fovy, float aspect, float near, float far) 
 	this->projectionParams.perspective.fovy = fovy;
 	this->projectionParams.perspective.near = near;
 	this->projectionParams.perspective.far = far;
+	this->projectionParams.perspective.aspect = aspect;
 }
 
 void GO_Camera::setCustomProjection(const glm::mat4& proj) {

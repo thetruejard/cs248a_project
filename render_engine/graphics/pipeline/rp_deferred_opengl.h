@@ -1,6 +1,7 @@
 #pragma once
 #include "graphics/pipeline/rp_deferred.h"
 #include "graphics/graphics_opengl.h"
+#include "geometry/sphere.h"
 
 
 class RP_Deferred_OpenGL : public RP_Deferred {
@@ -25,10 +26,13 @@ public:
 		None = 0,
 		BoundingSphere = 1,
 		RasterSphere = 2,
-		Tiled = 3,
-		Clustered = 4,
+		TiledCPU = 3,
+		ClusteredCPU = 4,
 	};
 	LightCulling culling = LightCulling::None;
+	// (X,Y,Z) For tiled (instead of clustered), third element should be 1.
+	glm::ivec3 numTiles = glm::ivec3(80, 45, 32);
+	GLint maxLightsPerTile = 64;
 
 
 private:
@@ -56,4 +60,26 @@ private:
 	static constexpr GLuint lightsSSBOBinding = 0;		// Must align with deferred_light.frag
 	void updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix);
 
+	// The SSBO storing mappings to ranges in lightsIndexSSBO (2 values per cluster, pos and len)
+	GLuint tileLightMappingSSBO = 0;
+	glm::ivec3 tileLightMappingRes;			// The resolution allocated. For tiles, z=1.
+	std::vector<GLint> tileLightMapping;	// When using CPU, stores values to be copied into SSBO.
+	static constexpr GLuint tileLightMappingSSBOBinding = 1;		// Must align with deferred_light.frag
+	void updateTileLightMappingSSBO();		// Checks size and, if CPU, copies values from tileLightMapping.
+
+
+	// The SSBO containing light lists for each cluster. tileLightMapping stores ranges in this list.
+	GLuint lightsIndexSSBO = 0;
+	size_t lightsIndexSSBOSize = 0;			// Size in bytes.
+	static constexpr GLuint lightsIndexSSBOBinding = 2;				// Must align with deferred_light.frag
+	std::vector<GLint> lightsIndex;			// When using CPU, stores values to be copied into SSBO.
+	void updateLightsIndexSSBO();			// Checks size and, if CPU, copies values from lightsIndex.
+
+
+	void runTilesCPU(Scene* scene);
+	void runClustersCPU(Scene* scene);
+
+
+	// Cache light volumes to avoid reallocating memory.
+	std::vector<std::pair<Sphere, float>> lightVolumes;
 };

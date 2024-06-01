@@ -10,6 +10,7 @@ uniform sampler2D textureAlbedo;
 uniform sampler2D textureMetalRough;
 
 uniform vec2 viewportSize;
+uniform vec3 numTiles;
 
 
 
@@ -210,6 +211,20 @@ Light getLightData(int idx) {
 	return l;
 }
 
+// Binding must align with rp_deferred_opengl.h
+layout(std430, binding = 1) buffer tileLightMappingSSBO
+{
+	int tileLightMapping[];
+};
+
+// Binding must align with rp_deferred_opengl.h
+layout(std430, binding = 2) buffer lightsIndexSSBO
+{
+	int lightsIndex[];
+};
+
+
+
 // pos: vec3, radius float
 vec4 getBoundingSphere(Light light) {
 	const float thresh = 0.02f;
@@ -219,6 +234,9 @@ vec4 getBoundingSphere(Light light) {
 	float rad = sqrt(color / (thresh * atten));
 	return vec4(light.positionType.xyz, rad);
 }
+
+
+
 
 
 
@@ -278,6 +296,26 @@ void main() {
 			metalRough.y,
 			normal
 		), 0.0);
+	}
+	else if (cullingMethod.x == 3) {
+		// Tiled
+		ivec2 tileCoord = ivec2(floor(uv * numTiles.xy));
+		int startIdx = tileLightMapping[2 * (tileCoord.y * int(numTiles.x) + tileCoord.x)];
+		int numIdxs =  tileLightMapping[2 * (tileCoord.y * int(numTiles.x) + tileCoord.x) + 1];
+		for (int i = 0; i < numIdxs; i++) {
+			int lightIdx = lightsIndex[startIdx + i];
+			Light light = getLightData(lightIdx);
+			color += vec4(processLight(
+				light,
+				position,
+				albedo,
+				metalRough.x,
+				metalRough.y,
+				normal
+			), 0.0);
+			if (light.positionType.w == 2.0)
+				color += 0.01 * vec4(light.color.rgb, 0.0);
+		}
 	}
 	else {
 		color += vec4(1.0, 0.0, 1.0, 0.0);

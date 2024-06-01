@@ -71,7 +71,7 @@ public:
 	void setAspect(float aspect);
 
 
-private:
+// private:			// TEMP: For simplicity, just make everything public
 
 	enum class ProjectionType {
 		Ortho_yradius,			// Orthographic defined by a yradius and aspect.
@@ -98,6 +98,7 @@ private:
 			float fovy;
 			float near;
 			float far;
+			float aspect;
 		} perspective;
 	
 	} projectionParams;
