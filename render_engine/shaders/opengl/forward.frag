@@ -264,6 +264,7 @@ void main() {
 		colorDiffuse.rgb,
 		colorDiffuse.a
 	);
+	albedo = pow(albedo, vec3(2.2));
 
 	// Sample the metalness.
 	float metalness = mix(

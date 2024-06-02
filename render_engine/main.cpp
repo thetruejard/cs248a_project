@@ -26,12 +26,80 @@ using json = nlohmann::json;
 RenderEngine engine;
 
 
+void spawnLights(Scene* scene, size_t num_lights) {
+
+    std::vector<GameObject*> lightSpawns;
+
+    // Traverse for 2 purposes:
+    // 1. Count the number of existing lights (i.e. remove from num_lights)
+    // 2. Find the "LIGHT_SPAWN" objects
+    std::function<void(Ref<GameObject>)> recurse = [&recurse, &num_lights, &lightSpawns](Ref<GameObject> root) {
+        if (root->getTypeName() == "Light") {
+            if (num_lights > 0)
+                num_lights--;
+        }
+        if (root->getName().find("LIGHT_SPAWN") != std::string::npos) {
+            lightSpawns.push_back(root.get());
+        }
+        for (auto child : root->getChildren()) {
+            recurse(child);
+        }
+    };
+    recurse(scene->getRoot());
+
+    auto random = []() { return float(rand()) / float(RAND_MAX); };
+    auto chooseLightPos = [&random, &lightSpawns]() {
+        int spawnIdx = rand() % lightSpawns.size();
+        float angle = 2.0f * 3.141592653589f * random();
+        float radius = random();
+        float height = 2.0f * random() - 1.0f;
+        glm::vec4 normalizedCoords = glm::vec4(radius * cos(angle), radius * sin(angle), height, 1.0f);
+        glm::vec4 outCoords = lightSpawns[spawnIdx]->getModelMatrix() * normalizedCoords;
+        return glm::vec3(outCoords);
+    };
+
+
+    bool make_atten_sphere = false;
+    Ref<Material> s_mat = engine.createMaterial();
+    s_mat->assignDiffuseColor(glm::vec4(1.0f, 0.8f, 0.4f, 1.0f));
+    Ref<Mesh> sphere = engine.createMesh();
+    sphere->assignMaterial(s_mat);
+    Sphere(0.02f).toMesh(sphere, 12, 8);
+    sphere->uploadMesh();
+    for (size_t i = 0; i < num_lights; i++) {
+        Ref<GO_Light> light = engine.createObject<GO_Light>();
+        Ref<GO_Mesh> mesh = engine.createObject<GO_Mesh>();
+        mesh->assignMesh(sphere);
+        mesh->setParent(light, false);
+        glm::vec3 pos = chooseLightPos();
+        light->setPosition(pos);
+        glm::vec3 color = glm::normalize(glm::vec3(random(), random(), random()));
+        light->color = 3.0f * color;
+        scene->addObject(light);
+        if (make_atten_sphere) {
+            Sphere bs = light->getBoundingSphere();
+            Ref<Mesh> bs_mesh = engine.createMesh();
+            bs.toMesh(bs_mesh, 12, 8);
+            bs_mesh->uploadMesh();
+            Ref<Material> bs_mat = engine.createMaterial();
+            bs_mat->assignDiffuseColor(glm::vec4(0.1f * color, 1.0f));
+            bs_mat->wireframe = true;
+            bs_mesh->assignMaterial(bs_mat);
+            Ref<GO_Mesh> bs_obj = engine.createObject<GO_Mesh>();
+            bs_obj->assignMesh(bs_mesh);
+            bs_obj->setParent(light, true);     // Sphere is already at correct position, to adjust to fit
+        }
+    }
+
+}
+
+
 void setupDemoScene(Scene* scene, size_t num_lights) {
 
-    scene->backgroundColor = 0.2f * glm::vec3(0.5f, 0.6f, 1.0f); //1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
+    scene->backgroundColor = 0.1f * glm::vec3(0.5f, 0.6f, 1.0f); //1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
 
     std::cout << "Loading scene\n"; 
-    Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/ship/ship.gltf");
+    Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/pirates/pirates.gltf");
     if (!object) {
         std::cout << "Failed to load scene\n";
         exit(0);
@@ -50,7 +118,7 @@ void setupDemoScene(Scene* scene, size_t num_lights) {
     // Make the camera appear third-person-ish by moving it backwards relative to the controller.
     Ref<GO_Camera> camera = engine.createObject<GO_Camera>();
     camera->setPosition(0.0f, 0.0f, 1.0f);
-    camera->setPerspective(glm::radians(70.0f), 1280.0f / 720.0f, 0.1f, 100.0f);
+    camera->setPerspective(glm::radians(70.0f), 1920.0f / 1080.0f, 0.1f, 100.0f);
     camera->setParent(controller, false);
     scene->addObject(controller);
     scene->setActiveCamera(camera);
@@ -77,39 +145,7 @@ void setupDemoScene(Scene* scene, size_t num_lights) {
     };
     dim_the_lights(object);
 
-
-    bool make_atten_sphere = false;
-    Ref<Material> s_mat = engine.createMaterial();
-    s_mat->assignDiffuseColor(glm::vec4(1.0f, 1.0f, 1.0f , 1.0f));
-    Ref<Mesh> sphere = engine.createMesh();
-    sphere->assignMaterial(s_mat);
-    Sphere(0.1f).toMesh(sphere, 12, 8);
-    sphere->uploadMesh();
-    for (size_t i = 0; i < num_lights; i++) {
-        Ref<GO_Light> light = engine.createObject<GO_Light>();
-        Ref<GO_Mesh> mesh = engine.createObject<GO_Mesh>();
-        mesh->assignMesh(sphere);
-        mesh->setParent(light, false);
-        glm::vec3 pos = glm::vec3(10.0f * (2.0f * random() - 1.0f), 5.0f * random(), 10.0f * (2.0f * random() - 1.0f));
-        light->setPosition(pos);
-        glm::vec3 color = glm::normalize(glm::vec3(random(), random(), random()));
-        light->color = 3.0f * color;
-        scene->addObject(light);
-        if (make_atten_sphere) {
-            Sphere bs = light->getBoundingSphere();
-            Ref<Mesh> bs_mesh = engine.createMesh();
-            bs.toMesh(bs_mesh, 12, 8);
-            bs_mesh->uploadMesh();
-            Ref<Material> bs_mat = engine.createMaterial();
-            bs_mat->assignDiffuseColor(glm::vec4(0.1f * color, 1.0f));
-            bs_mat->wireframe = true;
-            bs_mesh->assignMaterial(bs_mat);
-            Ref<GO_Mesh> bs_obj = engine.createObject<GO_Mesh>();
-            bs_obj->assignMesh(bs_mesh);
-            bs_obj->setParent(light, true);     // Sphere is already at correct position, to adjust to fit
-        }
-    }
-
+    spawnLights(scene, num_lights);
 
     std::cout << "Scene graph:\n";
     Utils::Print::objectTree(scene->getRoot().get());
@@ -124,12 +160,12 @@ void argsError() {
 int main(int argc, char* argv[]) {
 
     RenderPipelineType pipeline = RenderPipelineType::Deferred;
-    std::string pipeline_name = "deferred-rastersphere";
+    std::string pipeline_name = "deferred-boundingsphere";
     glm::ivec3 numTiles = glm::ivec3(80, 45, 32);
     GLint maxLightsPerTile = 64;
-    size_t num_lights = 100;
+    size_t num_lights = 1000;
     std::filesystem::path log_file;
-    bool interactive = true;
+    bool interactive = false;
 
     srand(1);
 
@@ -270,7 +306,7 @@ int main(int argc, char* argv[]) {
     }
     else {
         // Load camera path
-        std::ifstream campath_file("samples/assets/ian/cam_trajectory.json");
+        std::ifstream campath_file("samples/assets/pirates/camera_traj.json");
         json campath = json::parse(campath_file);
         std::vector<float> cam_mats;
         size_t num_cam_mats = campath.size();
@@ -284,7 +320,7 @@ int main(int argc, char* argv[]) {
             cam_mats.insert(cam_mats.end(), m.begin(), m.end());
         }
 
-        json result = engine.launch_eval("Eval", 1280, 720, false, (glm::mat4*)cam_mats.data(), num_cam_mats, !log_file.empty());
+        json result = engine.launch_eval("Eval", 1920, 1080, false, (glm::mat4*)cam_mats.data(), num_cam_mats, !log_file.empty());
 
         if (!log_file.empty()) {
             std::ofstream log_out(log_file);
