@@ -161,9 +161,9 @@ int main(int argc, char* argv[]) {
 
     RenderPipelineType pipeline = RenderPipelineType::Deferred;
     std::string pipeline_name = "deferred-clustered-gpu";
-    glm::ivec3 numTiles = glm::ivec3(80, 45, 32);
+    glm::ivec3 numTiles = glm::ivec3(16, 9, 24);
     GLint maxLightsPerTile = 64;
-    size_t num_lights = 100;
+    size_t num_lights = 50;
     std::filesystem::path log_file;
     bool interactive = false;
 

@@ -346,6 +346,22 @@ void Shader_OpenGL::bind() {
 }
 
 
+
+void Shader_OpenGL::readCompute(std::filesystem::path path) {
+	std::stringstream vertcode;
+	std::string line;
+	std::ifstream file;
+
+	file.open(path);
+	if (!file.is_open()) {
+		MessageBoxA(NULL, "Could not find file", "Compute Shader", MB_OK | MB_ICONERROR);
+	}
+	while (std::getline(file, line)) {
+		vertcode << line << "\n";
+	}
+	file.close();
+	this->compileCompute(vertcode.str());
+}
 void Shader_OpenGL::read(std::filesystem::path vertPath) {
 	std::stringstream vertcode;
 	std::string line;
@@ -420,6 +436,25 @@ void Shader_OpenGL::read(std::filesystem::path vertPath, std::filesystem::path g
 }
 
 
+
+void Shader_OpenGL::compileCompute(std::string code) {
+	this->clear();
+	GLuint vs = glCreateShader(GL_COMPUTE_SHADER);
+	// We must extract the pointers so we can pass a multi-dim array.
+	const char* vc = code.c_str();
+	glShaderSource(vs, 1, &vc, NULL);
+	glCompileShader(vs);
+	bool success = this->checkShaderErrors(vs, "Compute Shader");
+	if (success) {
+		this->programID = glCreateProgram();
+		glAttachShader(this->programID, vs);
+		glLinkProgram(this->programID);
+	}
+	else {
+		this->programID = 0;
+	}
+	glDeleteShader(vs);
+}
 void Shader_OpenGL::compile(std::string vertCode) {
 	this->clear();
 	GLuint vs = glCreateShader(GL_VERTEX_SHADER);

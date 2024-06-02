@@ -8,6 +8,8 @@
 #include "glm/gtc/matrix_transform.hpp"
 
 #include <iostream>
+#include <sstream>
+#include <fstream>
 
 
 
@@ -298,10 +300,21 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 	else if (this->culling == LightCulling::ClusteredCPU) {
 		this->runClustersCPU(scene);
 	}
+	else if (this->culling == LightCulling::TiledGPU) {
+
+	}
+	else if (this->culling == LightCulling::ClusteredGPU) {
+		this->runClustersGPU(scene);
+	}
+
+	this->lightShader.bind();
 
 
 	if (this->culling != LightCulling::RasterSphere) {
 
+		this->lightShader.setUniform1f("zNear", scene->getActiveCamera()->projectionParams.perspective.near);
+		this->lightShader.setUniform1f("zFar", scene->getActiveCamera()->projectionParams.perspective.far);
+		this->lightShader.setUniformMat4("projMatrix", projMatrix);
 		this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)this->culling, 0));
 		this->thisGraphics->primitives.rectangle->draw();
 
@@ -490,14 +503,15 @@ void RP_Deferred_OpenGL::updateTileLightMappingSSBO() {
 	else {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->tileLightMappingSSBO);
 	}
-	if ((GLint)this->tileLightMapping.size() != this->numTiles.x * this->numTiles.y * this->numTiles.z * 2) {
-		std::cout << "TILE LIGHT MAPPING MISMATCH: " << this->tileLightMapping.size() << " | " <<
-			this->numTiles.x << "," << this->numTiles.y << "," << this->numTiles.z << "\n";
-		return;
-	}
-	if (this->culling == LightCulling::TiledCPU || this->culling == LightCulling::ClusteredCPU)
+	if (this->culling == LightCulling::TiledCPU || this->culling == LightCulling::ClusteredCPU) {
+		if ((GLint)this->tileLightMapping.size() != this->numTiles.x * this->numTiles.y * this->numTiles.z * 2) {
+			std::cout << "TILE LIGHT MAPPING MISMATCH: " << this->tileLightMapping.size() << " | " <<
+				this->numTiles.x << "," << this->numTiles.y << "," << this->numTiles.z << "\n";
+			return;
+		}
 		glBufferSubData(GL_SHADER_STORAGE_BUFFER, (GLintptr)0,
 			(GLsizeiptr)(sizeof(GLint) * this->tileLightMapping.size()), this->tileLightMapping.data());
+	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
@@ -506,7 +520,7 @@ void RP_Deferred_OpenGL::updateLightsIndexSSBO() {
 	if (this->culling == LightCulling::TiledCPU || this->culling == LightCulling::ClusteredCPU)
 		neededSize = sizeof(GLint) * this->lightsIndex.size();
 	else
-		neededSize = 0;		// TODO: GPU
+		neededSize = sizeof(GLint) * this->maxLightsPerTile * this->numTiles.x * this->numTiles.y * this->numTiles.z;
 	if (this->lightsIndexSSBO == 0 || this->lightsIndexSSBOSize < neededSize) {
 		if (this->lightsIndexSSBO != 0)
 			glDeleteBuffers(1, &this->lightsIndexSSBO);
@@ -523,6 +537,12 @@ void RP_Deferred_OpenGL::updateLightsIndexSSBO() {
 	if (this->culling == LightCulling::TiledCPU || this->culling == LightCulling::ClusteredCPU) {
 		glBufferSubData(GL_SHADER_STORAGE_BUFFER, (GLintptr)0,
 			(GLsizeiptr)(sizeof(GLint) * this->lightsIndex.size()), this->lightsIndex.data());
+	}
+	if (this->globalIndexCountSSBO == 0) {
+		glGenBuffers(1, &this->globalIndexCountSSBO);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->globalIndexCountSSBO);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), (void*)0, GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, this->globalIndexCountSSBOBinding, this->globalIndexCountSSBO);
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
@@ -648,3 +668,83 @@ void RP_Deferred_OpenGL::runTilesCPU(Scene* scene) {
 void RP_Deferred_OpenGL::runClustersCPU(Scene* scene) {
 
 }
+
+
+
+
+
+
+void RP_Deferred_OpenGL::updateClustersSSBO(Scene* scene) {
+	GO_Camera* camera = scene->getActiveCamera().get();
+	if (!camera)
+		return;
+	if (this->clustersSSBO == 0 || this->clustersRes != this->numTiles) {
+		if (this->clustersSSBO != 0)
+			glDeleteBuffers(1, &this->clustersSSBO);
+		glGenBuffers(1, &this->clustersSSBO);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->clustersSSBO);
+		GLsizeiptr size = sizeof(glm::vec4) * this->numTiles.x * this->numTiles.y * this->numTiles.z * 2;
+		glBufferData(GL_SHADER_STORAGE_BUFFER, size, (void*)0, GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, this->clustersSSBOBinding, this->clustersSSBO);
+		this->clustersRes = this->numTiles;
+		std::cout << "REALLOCATING clustersSSBO\n";
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+
+		// Load the compute shader if we haven't already
+		if (this->clusterGenShader.getID() == 0) {
+			this->clusterGenShader.readCompute(
+				"shaders/opengl/clustersgen.glsl"
+			);
+		}
+		this->clusterGenShader.bind();
+		this->clusterGenShader.setUniform1f("zNear", camera->projectionParams.perspective.near);
+		this->clusterGenShader.setUniform1f("zFar", camera->projectionParams.perspective.far);
+		glm::mat4 invProj = glm::inverse(camera->getProjectionMatrix());
+		this->clusterGenShader.setUniformMat4("inverseProjection", invProj);
+		glDispatchCompute((GLuint)this->numTiles.x, (GLuint)this->numTiles.y, (GLuint)this->numTiles.z);
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+	}
+}
+
+
+
+
+
+void RP_Deferred_OpenGL::runClustersGPU(Scene* scene) {
+	// Also runs cluster AABB gen compute shader if needed.
+	this->updateClustersSSBO(scene);
+	// The next two just make sure the buffers are sufficiently large.
+	this->updateLightsIndexSSBO();
+	this->updateTileLightMappingSSBO();
+
+	if (this->clusterCullLightsShader.getID() == 0) {
+		this->clusterCullLightsShader.readCompute(
+			"shaders/opengl/clusterscull.glsl"
+		);
+	}
+	this->clusterCullLightsShader.bind();
+	glDispatchCompute(1, 1, 6);
+	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->tileLightMappingSSBO);
+	//GLint* buf = (GLint*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+	//std::cout << "BEGIN GRID BUFFER\n";
+	//for (int i = 0; i < this->numTiles.x * this->numTiles.y * this->numTiles.z * 2; i++) {
+	//	std::cout << buf[i] << " ";
+	//}
+	//std::cout << "END GRID BUFFER\n";
+	//glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	//
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->lightsIndexSSBO);
+	//buf = (GLint*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+	//std::cout << "BEGIN INDEX BUFFER\n";
+	//for (int i = 0; i < lightsIndexSSBOSize; i++) {
+	//	std::cout << buf[i] << " ";
+	//}
+	//std::cout << "END INDEX BUFFER\n";
+	//glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+

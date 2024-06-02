@@ -12,6 +12,10 @@ uniform sampler2D textureMetalRough;
 uniform vec2 viewportSize;
 uniform vec3 numTiles;
 
+uniform float zNear;
+uniform float zFar;
+uniform mat4 projMatrix;
+
 
 
 // Light parameters.
@@ -236,6 +240,13 @@ vec4 getBoundingSphere(Light light) {
 }
 
 
+float linearDepth(float depthSample){
+    float depthRange = 2.0 * depthSample - 1.0;
+    // Near... Far... wherever you are...
+    float linear = 2.0 * zNear * zFar / (zFar + zNear - depthRange * (zFar - zNear));
+    return linear;
+}
+
 
 
 
@@ -304,6 +315,31 @@ void main() {
 		int numIdxs =  tileLightMapping[2 * (tileCoord.y * int(numTiles.x) + tileCoord.x) + 1];
 		for (int i = 0; i < numIdxs; i++) {
 			int lightIdx = lightsIndex[startIdx + i];
+			Light light = getLightData(lightIdx);
+			color += vec4(processLight(
+				light,
+				position,
+				albedo,
+				metalRough.x,
+				metalRough.y,
+				normal
+			), 0.0);
+		}
+	}
+	else if (cullingMethod.x == 6) {
+		// Clustered
+		float scale = numTiles.z / log2(zFar / zNear);
+		float bias = -(numTiles.z * log2(zNear) / log2(zFar / zNear));
+		uint zTile     = uint(max(log2(-position.z) * scale + bias, 0.0));
+	    uvec3 tiles    = uvec3( uvec2( numTiles.xy * gl_FragCoord.xy / viewportSize.xy ), zTile);
+		uint tileIndex = tiles.x +
+                     uint(numTiles.x) * tiles.y +
+                     uint(numTiles.x * numTiles.y) * tiles.z;
+		int lightCount       = tileLightMapping[2*tileIndex+1];
+		int lightIndexOffset = tileLightMapping[2*tileIndex];
+		for (int i = 0; i < lightCount; i++) {
+			//color += vec4(0.1, 0.0, 0.0, 0.0);
+			int lightIdx = lightsIndex[lightIndexOffset + i];
 			Light light = getLightData(lightIdx);
 			color += vec4(processLight(
 				light,
