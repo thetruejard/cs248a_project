@@ -160,10 +160,10 @@ void argsError() {
 int main(int argc, char* argv[]) {
 
     RenderPipelineType pipeline = RenderPipelineType::Deferred;
-    std::string pipeline_name = "deferred-boundingsphere";
+    std::string pipeline_name = "deferred-clustered-gpu";
     glm::ivec3 numTiles = glm::ivec3(80, 45, 32);
     GLint maxLightsPerTile = 64;
-    size_t num_lights = 1000;
+    size_t num_lights = 100;
     std::filesystem::path log_file;
     bool interactive = false;
 
@@ -184,7 +184,13 @@ int main(int argc, char* argv[]) {
         else if (args[i] == "--pipeline") {
             if (++i == args.size())
                 argsError();
-            if (args[i] == "deferred-none" ||
+            if (args[i] == "none") {
+                pipeline = RenderPipelineType::None;
+            }
+            if (args[i] == "clay") {
+                pipeline = RenderPipelineType::Clay;
+            }
+            else if (args[i] == "deferred-none" ||
                 args[i] == "deferred-boundingsphere" ||
                 args[i] == "deferred-rastersphere" ||
                 args[i] == "deferred-tiled-cpu" ||
@@ -302,7 +308,7 @@ int main(int argc, char* argv[]) {
     engine.setActiveScene(scene);
 
     if (interactive) {
-        engine.launch("test", 1920, 1080, false);
+        engine.launch("Interactive", 1920, 1080, false);
     }
     else {
         // Load camera path

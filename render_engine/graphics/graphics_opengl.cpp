@@ -3,6 +3,7 @@
 #include "graphics/pipeline/rp_temp_opengl.h"
 #include "graphics/pipeline/rp_deferred_opengl.h"
 #include "graphics/pipeline/rp_forward_opengl.h"
+#include "graphics/pipeline/rp_none_opengl.h"
 #include "io/callbacks_glfw.h"
 
 #include <sstream>
@@ -74,6 +75,9 @@ void Graphics_OpenGL::setRenderPipeline(RenderPipelineType pipelineType) {
 		break;
 	case RenderPipelineType::Forward:
 		this->pipeline = new RP_Forward_OpenGL(*this);
+		break;
+	case RenderPipelineType::None:
+		this->pipeline = new RP_None_OpenGL(*this);
 		break;
 	default:
 		this->pipeline = nullptr;

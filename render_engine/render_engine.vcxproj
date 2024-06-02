@@ -163,6 +163,8 @@
     <ClCompile Include="graphics\pipeline\rp_deferred_opengl.cpp" />
     <ClCompile Include="graphics\pipeline\rp_forward.cpp" />
     <ClCompile Include="graphics\pipeline\rp_forward_opengl.cpp" />
+    <ClCompile Include="graphics\pipeline\rp_none.cpp" />
+    <ClCompile Include="graphics\pipeline\rp_none_opengl.cpp" />
     <ClCompile Include="graphics\pipeline\rp_temp.cpp" />
     <ClCompile Include="graphics\pipeline\rp_temp_opengl.cpp" />
     <ClCompile Include="graphics\texture.cpp" />
@@ -214,6 +216,8 @@
     <ClInclude Include="graphics\material.h" />
     <ClInclude Include="graphics\pipeline\rp_deferred.h" />
     <ClInclude Include="graphics\pipeline\rp_deferred_opengl.h" />
+    <ClInclude Include="graphics\pipeline\rp_none.h" />
+    <ClInclude Include="graphics\pipeline\rp_none_opengl.h" />
     <ClInclude Include="graphics\pipeline\rp_forward.h" />
     <ClInclude Include="graphics\pipeline\rp_forward_opengl.h" />
     <ClInclude Include="graphics\pipeline\rp_temp.h" />

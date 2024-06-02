@@ -14,6 +14,7 @@ class Scene;
 * or that some pipeline/backend combinations may have incomplete features.
 */
 enum class RenderPipelineType {
+	None,
 	Clay,
 	Temp,
 	Deferred,

@@ -2,16 +2,16 @@
 #include "graphics/pipeline/renderpipeline.h"
 
 /*
-* ===== Forward =====
-* OpenGL (RP_Forward_OpenGL)
+* ===== None =====
+* OpenGL (RP_None_OpenGL)
 *
-* A forward render pipeline.
+* No render pipeline.
 *
 */
-class RP_Forward : public RenderPipeline {
+class RP_None: public RenderPipeline {
 public:
 
-	RP_Forward(Graphics& graphics);
+	RP_None(Graphics& graphics);
 
 	virtual RenderPipelineType getType() override;
 	virtual std::string getName() override;
