@@ -314,7 +314,6 @@ void RP_Deferred_OpenGL::render(Scene* scene) {
 
 		this->lightShader.setUniform1f("zNear", scene->getActiveCamera()->projectionParams.perspective.near);
 		this->lightShader.setUniform1f("zFar", scene->getActiveCamera()->projectionParams.perspective.far);
-		this->lightShader.setUniformMat4("projMatrix", projMatrix);
 		this->lightShader.setUniform2i("cullingMethod", glm::ivec2((GLint)this->culling, 0));
 		this->thisGraphics->primitives.rectangle->draw();
 
@@ -541,7 +540,7 @@ void RP_Deferred_OpenGL::updateLightsIndexSSBO() {
 	if (this->globalIndexCountSSBO == 0) {
 		glGenBuffers(1, &this->globalIndexCountSSBO);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->globalIndexCountSSBO);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), (void*)0, GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, (GLsizeiptr)sizeof(GLuint), (void*)0, GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, this->globalIndexCountSSBOBinding, this->globalIndexCountSSBO);
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
@@ -720,11 +719,12 @@ void RP_Deferred_OpenGL::runClustersGPU(Scene* scene) {
 
 	if (this->clusterCullLightsShader.getID() == 0) {
 		this->clusterCullLightsShader.readCompute(
-			"shaders/opengl/clusterscull.glsl"
+			"shaders/opengl/clusterscull2.glsl"
 		);
 	}
 	this->clusterCullLightsShader.bind();
-	glDispatchCompute(1, 1, 6);
+	//glDispatchCompute(1, 1, 1);
+	glDispatchCompute((GLuint)this->numTiles.x, (GLuint)this->numTiles.y, (GLuint)this->numTiles.z);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
 	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->tileLightMappingSSBO);
@@ -736,7 +736,7 @@ void RP_Deferred_OpenGL::runClustersGPU(Scene* scene) {
 	//std::cout << "END GRID BUFFER\n";
 	//glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-	//
+	
 	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->lightsIndexSSBO);
 	//buf = (GLint*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 	//std::cout << "BEGIN INDEX BUFFER\n";
@@ -744,6 +744,12 @@ void RP_Deferred_OpenGL::runClustersGPU(Scene* scene) {
 	//	std::cout << buf[i] << " ";
 	//}
 	//std::cout << "END INDEX BUFFER\n";
+	//glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->globalIndexCountSSBO);
+	//GLuint* buf = (GLuint*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+	//std::cout << "GLOBAL INDEX: " << *buf << "\n";
 	//glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }

@@ -22,8 +22,33 @@ using json = nlohmann::json;
 #include <string>
 #include <fstream>
 
+#define PI 3.141592653589f
+
 
 RenderEngine engine;
+
+
+class Moving : public Component {
+public:
+    glm::vec3 v;
+    float phase;
+    GameObject* go;
+    
+    Moving(GameObject* go) : Component(go) {
+        this->go = go;
+        auto random = []() { return float(rand()) / float(RAND_MAX); };
+        this->phase = PI * random();
+        constexpr float mag = 0.02f;
+        this->v = mag * glm::normalize(2.0f * glm::vec3(random(), random(), random()) - 1.0f);
+    }
+
+    void evaluate(float deltaTime) override {
+        this->go->deltaPosition(cos(this->phase) * this->v);
+        constexpr float speed = 0.1f;
+        this->phase += speed;
+    }
+};
+
 
 
 void spawnLights(Scene* scene, size_t num_lights) {
@@ -74,7 +99,8 @@ void spawnLights(Scene* scene, size_t num_lights) {
         glm::vec3 pos = chooseLightPos();
         light->setPosition(pos);
         glm::vec3 color = glm::normalize(glm::vec3(random(), random(), random()));
-        light->color = 3.0f * color;
+        light->color = 6.0f * color;
+        light->addComponent<Moving>();
         scene->addObject(light);
         if (make_atten_sphere) {
             Sphere bs = light->getBoundingSphere();
@@ -130,11 +156,11 @@ void setupDemoScene(Scene* scene, size_t num_lights) {
     auto random = []() { return float(rand()) / float(RAND_MAX); };
     std::function<void(Ref<GameObject>)> dim_the_lights = [&dim_the_lights, &random](Ref<GameObject> root) {
         if (root->getTypeName() == "Light") {
-            constexpr float brightness = 0.0005f; // 0.0001f
+            constexpr float brightness = 0.001f; // 0.0001f
             auto L = root.cast<GO_Light>();
             L->color *= brightness;
             if (L->type == GO_Light::Type::Directional) {
-                L->color *= 1.0f;
+                L->color *= 2.0f;
             }
             std::cout << "LIGHT: " << root->getName() << " | ";
             Utils::Print::vec3(root.cast<GO_Light>()->color);
@@ -159,12 +185,13 @@ void argsError() {
 
 int main(int argc, char* argv[]) {
 
-    RenderPipelineType pipeline = RenderPipelineType::Deferred;
-    std::string pipeline_name = "deferred-clustered-gpu";
-    glm::ivec3 numTiles = glm::ivec3(16, 9, 24);
+    RenderPipelineType pipeline = RenderPipelineType::Forward;
+    std::string pipeline_name = "forward-clustered-gpu";
+    glm::ivec3 numTiles = glm::ivec3(48, 27, 24);
     GLint maxLightsPerTile = 64;
     size_t num_lights = 50;
     std::filesystem::path log_file;
+    std::filesystem::path render_dir;
     bool interactive = false;
 
     srand(1);
@@ -230,6 +257,11 @@ int main(int argc, char* argv[]) {
             if (++i == args.size())
                 argsError();
             log_file = args[i];
+        }
+        else if (args[i] == "--render-dir") {
+            if (++i == args.size())
+                argsError();
+            render_dir = args[i];
         }
         else if (args[i] == "--eval") {
             interactive = false;
@@ -326,7 +358,7 @@ int main(int argc, char* argv[]) {
             cam_mats.insert(cam_mats.end(), m.begin(), m.end());
         }
 
-        json result = engine.launch_eval("Eval", 1920, 1080, false, (glm::mat4*)cam_mats.data(), num_cam_mats, !log_file.empty());
+        json result = engine.launch_eval("Eval", 1920, 1080, false, (glm::mat4*)cam_mats.data(), num_cam_mats, !log_file.empty(), render_dir);
 
         if (!log_file.empty()) {
             std::ofstream log_out(log_file);

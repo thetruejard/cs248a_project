@@ -45,7 +45,8 @@
 				19,
 				20,
 				21,
-				22
+				22,
+				23
 			]
 		}
 	],
@@ -472,6 +473,19 @@
 				1.0237809419631958,
 				5.993279933929443
 			]
+		},
+		{
+			"name":"LIGHT_SPAWN.015",
+			"scale":[
+				9.357294082641602,
+				1.0418237447738647,
+				9.357294082641602
+			],
+			"translation":[
+				-5.652961730957031,
+				1.1364413499832153,
+				6.137650966644287
+			]
 		}
 	],
 	"materials":[
@@ -777,92 +791,92 @@
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_medium_hull_nor_gl",
-			"uri":"../../../../../../../Desktop/dutch_ship_medium_4k.gltf/textures/dutch_ship_medium_hull_nor_gl_4k.jpg"
+			"uri":"textures/dutch_ship_medium_hull_nor_gl_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_medium_hull_diff",
-			"uri":"../../../../../../../Desktop/dutch_ship_medium_4k.gltf/textures/dutch_ship_medium_hull_diff_4k.jpg"
+			"uri":"textures/dutch_ship_medium_hull_diff_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_medium_hull_metal-dutch_ship_medium_hull_rough",
-			"uri":"../../../../../../../Desktop/dutch_ship_medium_4k.gltf/textures/dutch_ship_medium_hull_arm_4k.jpg"
+			"uri":"textures/dutch_ship_medium_hull_arm_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_medium_rigging_nor_gl",
-			"uri":"../../../../../../../Desktop/dutch_ship_medium_4k.gltf/textures/dutch_ship_medium_rigging_nor_gl_4k.jpg"
+			"uri":"textures/dutch_ship_medium_rigging_nor_gl_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_medium_rigging_diff",
-			"uri":"../../../../../../../Desktop/dutch_ship_medium_4k.gltf/textures/dutch_ship_medium_rigging_diff_4k.jpg"
+			"uri":"textures/dutch_ship_medium_rigging_diff_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_medium_rigging_metal-dutch_ship_medium_rigging_rough",
-			"uri":"../../../../../../../Desktop/dutch_ship_medium_4k.gltf/textures/dutch_ship_medium_rigging_arm_4k.jpg"
+			"uri":"textures/dutch_ship_medium_rigging_arm_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_medium_sails_nor_gl",
-			"uri":"../../../../../../../Desktop/dutch_ship_medium_4k.gltf/textures/dutch_ship_medium_sails_nor_gl_4k.jpg"
+			"uri":"textures/dutch_ship_medium_sails_nor_gl_4k.jpg"
 		},
 		{
 			"mimeType":"image/png",
 			"name":"dutch_ship_medium_sails_diff-dutch_ship_medium_sails_alpha",
-			"uri":"../../../../../../../Desktop/dutch_ship_medium_4k.gltf/textures/dutch_ship_medium_sails_diff_4k.jpg"
+			"uri":"textures/dutch_ship_medium_sails_diff_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_medium_sails_rough",
-			"uri":"../../../../../../../Desktop/dutch_ship_medium_4k.gltf/textures/dutch_ship_medium_sails_arm_4k.jpg"
+			"uri":"textures/dutch_ship_medium_sails_arm_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_large_01_hull_nor_gl",
-			"uri":"../../../../../../../Desktop/dutch_ship_large_01_4k.gltf/textures/dutch_ship_large_01_hull_nor_gl_4k.jpg"
+			"uri":"textures/dutch_ship_large_01_hull_nor_gl_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_large_01_hull_diff",
-			"uri":"../../../../../../../Desktop/dutch_ship_large_01_4k.gltf/textures/dutch_ship_large_01_hull_diff_4k.jpg"
+			"uri":"textures/dutch_ship_large_01_hull_diff_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_large_01_hull_metal-dutch_ship_large_01_hull_rough",
-			"uri":"../../../../../../../Desktop/dutch_ship_large_01_4k.gltf/textures/dutch_ship_large_01_hull_arm_4k.jpg"
+			"uri":"textures/dutch_ship_large_01_hull_arm_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_large_01_rigging_nor_gl",
-			"uri":"../../../../../../../Desktop/dutch_ship_large_01_4k.gltf/textures/dutch_ship_large_01_rigging_nor_gl_4k.jpg"
+			"uri":"textures/dutch_ship_large_01_rigging_nor_gl_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_large_01_rigging_diff",
-			"uri":"../../../../../../../Desktop/dutch_ship_large_01_4k.gltf/textures/dutch_ship_large_01_rigging_diff_4k.jpg"
+			"uri":"textures/dutch_ship_large_01_rigging_diff_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_large_01_rigging_metal-dutch_ship_large_01_rigging_r",
-			"uri":"../../../../../../../Desktop/dutch_ship_large_01_4k.gltf/textures/dutch_ship_large_01_rigging_arm_4k.jpg"
+			"uri":"textures/dutch_ship_large_01_rigging_arm_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_large_01_sails_nor_gl",
-			"uri":"../../../../../../../Desktop/dutch_ship_large_01_4k.gltf/textures/dutch_ship_large_01_sails_nor_gl_4k.jpg"
+			"uri":"textures/dutch_ship_large_01_sails_nor_gl_4k.jpg"
 		},
 		{
 			"mimeType":"image/png",
 			"name":"dutch_ship_large_01_sails_diff-dutch_ship_large_01_sails_alpha",
-			"uri":"../../../../../../../Desktop/dutch_ship_large_01_4k.gltf/textures/dutch_ship_large_01_sails_diff_4k.jpg"
+			"uri":"textures/dutch_ship_large_01_sails_diff_4k.jpg"
 		},
 		{
 			"mimeType":"image/jpeg",
 			"name":"dutch_ship_large_01_sails_rough",
-			"uri":"../../../../../../../Desktop/dutch_ship_large_01_4k.gltf/textures/dutch_ship_large_01_sails_arm_4k.jpg"
+			"uri":"textures/dutch_ship_large_01_sails_arm_4k.jpg"
 		},
 		{
 			"mimeType":"image/png",

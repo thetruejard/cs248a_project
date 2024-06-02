@@ -5,9 +5,12 @@
 #include "GLFW/glfw3.h"
 #include "GLFW/glfw3native.h"
 
+#include "stb/stb_image_write.h"
+
 #include <atomic>
 #include <chrono>
 #include <iostream>
+#include <sstream>
 
 
 // TODO: TEMP until a logging system is made.
@@ -94,7 +97,8 @@ json RenderEngine::launch_eval(
 	bool fullscreen,
 	glm::mat4* camMats,
 	size_t numCamMats,
-	bool log
+	bool log,
+	std::filesystem::path render_dir
 ) {
 
 	if (this->graphics == nullptr) {
@@ -140,8 +144,24 @@ json RenderEngine::launch_eval(
 			}
 		}
 
-		// TODO (in the long run): Consider double buffering this data, if feasible.
 		this->graphics->render(this->activeScene.get());
+
+
+		if (!render_dir.empty()) {
+			if (!std::filesystem::exists(render_dir)) {
+				std::filesystem::create_directories(render_dir);
+			}
+			size_t w = this->graphics->getWidth();
+			size_t h = this->graphics->getHeight();
+			uint8_t* data = new uint8_t[3*w*h];
+			glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, data);
+			std::stringstream ss;
+			ss << std::setw(5) << std::setfill('0') << viewIdx << ".jpg";
+			stbi_flip_vertically_on_write(1);
+			int e = stbi_write_jpg((const char*)std::filesystem::absolute(render_dir / ss.str()).generic_string().c_str(), (int)w, (int)h, 3, data, 80);
+			delete[] data;
+		}
+
 		done = !this->graphics->pollEvents() || done;
 	}
 

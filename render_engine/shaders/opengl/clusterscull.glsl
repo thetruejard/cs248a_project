@@ -68,7 +68,7 @@ layout(std430, binding = 2) buffer lightsIndexSSBO
 };
 
 
-layout(std430, binding = 6) buffer globalIndexCountSSBO {
+layout(std430, binding = 4) buffer globalIndexCountSSBO {
     uint globalIndexCount;
 };
 

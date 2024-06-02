@@ -24,6 +24,10 @@ uniform int useNormalTex;
 uniform vec2 viewportSize;
 uniform vec3 numTiles;
 
+uniform float zNear;
+uniform float zFar;
+
+
 
 
 // Light parameters.
@@ -252,8 +256,6 @@ vec4 getBoundingSphere(Light light) {
 
 
 
-
-
 void main() {
 
 	// MATERIALS
@@ -359,6 +361,31 @@ void main() {
 			), 0.0);
 			if (light.positionType.w == 2.0)
 				color += 0.01 * vec4(light.color.rgb, 0.0);
+		}
+	}
+	else if (cullingMethod.x == 6) {
+		// Clustered
+		float scale = numTiles.z / log2(zFar / zNear);
+		float bias = -(numTiles.z * log2(zNear) / log2(zFar / zNear));
+		uint zTile     = uint(max(log2(-fs_in.position.z) * scale + bias, 0.0));
+	    uvec3 tiles    = uvec3( uvec2( numTiles.xy * gl_FragCoord.xy / viewportSize.xy ), zTile);
+		uint tileIndex = tiles.x +
+                     uint(numTiles.x) * tiles.y +
+                     uint(numTiles.x * numTiles.y) * tiles.z;
+		int lightCount       = tileLightMapping[2*tileIndex+1];
+		int lightIndexOffset = tileLightMapping[2*tileIndex];
+		for (int i = 0; i < lightCount; i++) {
+			//color += vec4(0.1, 0.0, 0.0, 0.0);
+			int lightIdx = lightsIndex[lightIndexOffset + i];
+			Light light = getLightData(lightIdx);
+			color += vec4(processLight(
+				light,
+				fs_in.position,
+				albedo,
+				metalness,
+				roughness,
+				normal
+			), 0.0);
 		}
 	}
 	else {

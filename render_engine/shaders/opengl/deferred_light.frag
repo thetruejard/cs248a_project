@@ -14,7 +14,6 @@ uniform vec3 numTiles;
 
 uniform float zNear;
 uniform float zFar;
-uniform mat4 projMatrix;
 
 
 
@@ -238,15 +237,6 @@ vec4 getBoundingSphere(Light light) {
 	float rad = sqrt(color / (thresh * atten));
 	return vec4(light.positionType.xyz, rad);
 }
-
-
-float linearDepth(float depthSample){
-    float depthRange = 2.0 * depthSample - 1.0;
-    // Near... Far... wherever you are...
-    float linear = 2.0 * zNear * zFar / (zFar + zNear - depthRange * (zFar - zNear));
-    return linear;
-}
-
 
 
 

@@ -54,7 +54,8 @@ public:
 		bool fullscreen,
 		glm::mat4* camMats,
 		size_t numCamMats,
-		bool log
+		bool log,
+		std::filesystem::path render_dir
 	);
 
 	Graphics* getGraphics();

@@ -247,6 +247,7 @@
     <None Include="shaders\opengl\clay.frag" />
     <None Include="shaders\opengl\clay.vert" />
     <None Include="shaders\opengl\clusterscull.glsl" />
+    <None Include="shaders\opengl\clusterscull2.glsl" />
     <None Include="shaders\opengl\clustersgen.glsl" />
     <None Include="shaders\opengl\deferred_gbuffer.frag" />
     <None Include="shaders\opengl\deferred_gbuffer.vert" />

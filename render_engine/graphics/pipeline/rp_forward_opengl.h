@@ -57,10 +57,6 @@ private:
 	void updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix);
 
 
-
-
-	// TODO: FOR LATER
-
 	// The SSBO storing mappings to ranges in lightsIndexSSBO (2 values per cluster, pos and len)
 	GLuint tileLightMappingSSBO = 0;
 	glm::ivec3 tileLightMappingRes;			// The resolution allocated. For tiles, z=1.
@@ -74,13 +70,29 @@ private:
 	size_t lightsIndexSSBOSize = 0;			// Size in bytes.
 	static constexpr GLuint lightsIndexSSBOBinding = 2;				// Must align with deferred_light.frag
 	std::vector<GLint> lightsIndex;			// When using CPU, stores values to be copied into SSBO.
+	GLuint globalIndexCountSSBO = 0;
+	static constexpr GLuint globalIndexCountSSBOBinding = 4;
 	void updateLightsIndexSSBO();			// Checks size and, if CPU, copies values from lightsIndex.
 
 
 	void runTilesCPU(Scene* scene);
 	void runClustersCPU(Scene* scene);
 
-
 	// Cache light volumes to avoid reallocating memory.
 	std::vector<std::pair<Sphere, float>> lightVolumes;
+
+
+
+
+	GLuint clustersSSBO = 0;
+	glm::ivec3 clustersRes;			// The resolution allocated. For tiles, z=1.
+	//std::vector<glm::vec4> clusters;	// Each cluster has 2 elements, min/max AABBs.
+	static constexpr GLuint clustersSSBOBinding = 3;		// Must align with deferred_light.frag
+	Shader_OpenGL clusterGenShader;
+	void updateClustersSSBO(Scene* scene);
+
+
+	Shader_OpenGL clusterCullLightsShader;
+
+	void runClustersGPU(Scene* scene);
 };
