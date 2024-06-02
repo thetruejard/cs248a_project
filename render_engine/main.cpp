@@ -72,6 +72,10 @@ void spawnLights(Scene* scene, size_t num_lights) {
     };
     recurse(scene->getRoot());
 
+    if (num_lights == 0 || lightSpawns.size() == 0) {
+        return;
+    }
+
     auto random = []() { return float(rand()) / float(RAND_MAX); };
     auto chooseLightPos = [&random, &lightSpawns]() {
         int spawnIdx = rand() % lightSpawns.size();
@@ -192,7 +196,7 @@ int main(int argc, char* argv[]) {
     size_t num_lights = 50;
     std::filesystem::path log_file;
     std::filesystem::path render_dir;
-    bool interactive = false;
+    bool interactive = true;
 
     srand(1);
 
