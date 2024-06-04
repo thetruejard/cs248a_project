@@ -78,7 +78,7 @@ layout(std430, binding = 4) buffer globalIndexCountSSBO {
 bool testSphereAABB(uint light, uint tile);
 float sqDistPointAABB(vec3 point, uint tile);
 
-const uint MAX_LIGHTS_PER_TILE = 64;
+const uint MAX_LIGHTS_PER_TILE = 128;
 
 
 void main() {

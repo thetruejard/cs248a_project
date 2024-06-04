@@ -192,7 +192,7 @@ int main(int argc, char* argv[]) {
     RenderPipelineType pipeline = RenderPipelineType::Forward;
     std::string pipeline_name = "forward-clustered-gpu";
     glm::ivec3 numTiles = glm::ivec3(48, 27, 24);
-    GLint maxLightsPerTile = 64;
+    GLint maxLightsPerTile = 128;
     size_t num_lights = 50;
     std::filesystem::path log_file;
     std::filesystem::path render_dir;
@@ -218,7 +218,7 @@ int main(int argc, char* argv[]) {
             if (args[i] == "none") {
                 pipeline = RenderPipelineType::None;
             }
-            if (args[i] == "clay") {
+            else if (args[i] == "clay") {
                 pipeline = RenderPipelineType::Clay;
             }
             else if (args[i] == "deferred-none" ||
@@ -366,7 +366,7 @@ int main(int argc, char* argv[]) {
 
         if (!log_file.empty()) {
             std::ofstream log_out(log_file);
-            //    log_out << result.dump();
+            log_out << result.dump();
         }
     }
 

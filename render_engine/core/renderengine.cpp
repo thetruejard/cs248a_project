@@ -11,6 +11,7 @@
 #include <chrono>
 #include <iostream>
 #include <sstream>
+#include <windows.h>
 
 
 // TODO: TEMP until a logging system is made.
@@ -121,6 +122,8 @@ json RenderEngine::launch_eval(
 	if (log) {
 		loggedFrametimes.reserve(numCamMats+1);
 	}
+
+	Sleep(1000);
 
 
 	auto lasttime = std::chrono::high_resolution_clock::now();
