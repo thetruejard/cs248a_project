@@ -1,3 +1,64 @@
+# Light Culling Methods for Real-time Rendering Applications
+
+Jared Watrous (jwat2002@stanford.edu)
+
+---
+
+This project is a benchmark for comparing different light culling methods in a real-time render pipeline. This project supports Windows only.
+
+## Build
+
+Rather than building, it may be easier to use the [precompiled release](https://github.com/thetruejard/cs348k_project/releases).
+
+Requires >=C++17, OpenGL 4.3+, MSVC, and the following dependencies:
+
+- [assimp](https://github.com/assimp/assimp)
+- [GLEW](https://github.com/nigels-com/glew)
+- [GLFW](https://github.com/glfw/glfw)
+- [GLM](https://github.com/g-truc/glm)
+- [stb_image.h](https://github.com/nothings/stb/blob/master/stb_image.h) / [stb_image_write.h](https://github.com/nothings/stb/blob/master/stb_image_write.h)
+
+Once all dependencies are installed and visible to the compiler, open `render_engine.sln` in a compatible version of Visual Studio (tested with VS2019 Platform Toolset v142 and Windows SDK 10.0) and build just as any other solution.
+
+## Run
+
+The program must be executed from the `render_engine/` subfolder such that `shaders/` is in its working directory. On Windows, it can typically be executed from the command line with:
+```
+../x64/Release/render_engine.exe [options]
+```
+(or the "Debug" equivalent.) If using the precompiled release, the program should be directly executable as `./render_engine.exe`.
+
+The following options are supported (default values can be viewed or changed by modifying `main.cpp`):
+- `--lights` (int) the number of lights to populate the scene with
+- `--pipeline` (str) which render pipeline to use; one of the following choices:
+    - `none` (no render pipeline; just a black screen)
+    - `clay` (fake shading, no lights)
+    - `forward-none`
+    - `forward-boundingsphere`
+    - `forward-clustered-gpu`
+    - `deferred-none`
+    - `deferred-boundingsphere`
+    - `deferred-rastersphere`
+    - `deferred-clustered-gpu`
+- `--numTiles` (int int) the number of screen-space tiles (two numbers) for clustered rendering
+- `--numClustersZ` (int) the number of depth subdivisions for clustered rendering
+- `--eval` runs the eval camera trajectory and exits when done (takes precedence over `--interactive`)
+- `--interactive` enables interactive camera controls
+- `--log-file` an output file path to save a json file with frametime benchmarks (only works with `--eval`)
+- `--render-dir` an output folder path to save rendered frames as JPG files (slow, only works with `--eval`)
+
+## Results
+
+![Sample light culling images](docs/sample_images.png)
+
+See a video version [here](https://drive.google.com/file/d/1g5uZtsiuNaM2lRFc9fFTxfLeDlTR3Edu/view?usp=drive_link)
+
+---
+
+***The remainder of this README is the initial project proposal, unrevised.***
+
+---
+
 # Clustered Forward+ Render Pipeline
 
 Jared Watrous (jwat2002@stanford.edu)
@@ -51,7 +112,7 @@ The biggest risk is if I can't manage to perfect the clustering process due to t
 
 # Technical Specs
 
-- This project will be written in C++17 using OpenGL 3.3+ (the minimum OpenGL version is STC)
+- This project will be written in C++17 using OpenGL ~~3.3+~~ 4.3+ (the minimum OpenGL version is STC)
 - I will target the Windows platform because that is what I have available. I will try to offer a Linux build option but cannot guarantee it will work. I will not be able to offer build support for macOS
 
 ### Dependencies
