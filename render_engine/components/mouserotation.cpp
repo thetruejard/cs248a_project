@@ -63,7 +63,7 @@ void MouseRotation::registerEventHook() {
 				return;
 			}
 
-			constexpr float turnSensitivity = 0.35f;
+			constexpr float turnSensitivity = 0.70f;
 			if (glfwGetInputMode(
 				this->thisEngine->getGraphics()->getWindow(),
 				GLFW_CURSOR) != GLFW_CURSOR_DISABLED) {

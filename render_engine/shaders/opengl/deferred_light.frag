@@ -20,10 +20,13 @@ uniform float zFar;
 // Light parameters.
 // We always use vec4 to avoid common alignment bugs in the OpenGL drivers
 struct Light {
+	// Light type (x), shadow type (y), and shadow map index (z).
+	// Type and ShadowType match the enums in go_light.h.
+	// Type: None=0, Dir=1, Point=2, Spot=3.
+	// ShadowType: None=0, Basic=1
+	vec4 typeShadowIndex;		// vec3
 	// Position (xyz) and type (w).
-	// Type matches the enum in go_light.h.
-	// None=0, Dir=1, Point=2, Spot=3.
-	vec4 positionType;			// vec4
+	vec4 position;				// vec3
 	// Normalized direction for point and spot lights.
 	vec4 direction;				// vec3
 	// Inner & outer angles (radians) for spot lights.
@@ -161,7 +164,7 @@ vec3 processLight(
 	float roughness,	// roughness of the surface
 	vec3 normal			// normal of surface
 ) {
-	float type = round(light.positionType.w);
+	float type = round(light.typeShadowIndex.x);
 	if (type == 0.0) {
 		return vec3(0.0);
 	}
@@ -175,7 +178,7 @@ vec3 processLight(
 	}
 	else if (type == 2.0) {
 		// Point.
-		vec3 diff = light.positionType.xyz - position;
+		vec3 diff = light.position.xyz - position;
 		dirToLight = normalize(diff);
 		lightColor *= computeAttenuation(length(diff), vec3(light.attenuation));
 	}
@@ -205,12 +208,13 @@ layout(std430, binding = 0) buffer lightBuffer
 };
 Light getLightData(int idx) {
 	Light l;
-	int offset = idx * 5;
-	l.positionType = lightData[offset + 0];
-	l.direction = lightData[offset + 1];
-	l.innerOuterAngles = lightData[offset + 2];
-	l.color = lightData[offset + 3];
-	l.attenuation = lightData[offset + 4];
+	int offset = idx * 6;
+	l.typeShadowIndex = lightData[offset + 0];
+	l.position = lightData[offset + 1];
+	l.direction = lightData[offset + 2];
+	l.innerOuterAngles = lightData[offset + 3];
+	l.color = lightData[offset + 4];
+	l.attenuation = lightData[offset + 5];
 	return l;
 }
 
@@ -235,7 +239,7 @@ vec4 getBoundingSphere(Light light) {
 	float color = max(max(light.color.r, light.color.g), light.color.b);
 	float atten = light.attenuation.z;
 	float rad = sqrt(color / (thresh * atten));
-	return vec4(light.positionType.xyz, rad);
+	return vec4(light.position.xyz, rad);
 }
 
 
@@ -271,7 +275,7 @@ void main() {
 		for (int i = 0; i < numLights.x; i++) {
 			Light l = getLightData(i);
 			vec4 boundingSphere = getBoundingSphere(l);
-			if (l.positionType.w == 2.0 &&
+			if (l.typeShadowIndex.x == 2.0 &&
 				distance(position, boundingSphere.xyz) >= boundingSphere.w) {
 				// Outside the sphere, cull the light
 				continue;

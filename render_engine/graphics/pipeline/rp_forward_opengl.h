@@ -2,6 +2,7 @@
 #include "graphics/pipeline/rp_forward.h"
 #include "graphics/graphics_opengl.h"
 #include "geometry/sphere.h"
+#include "objects/go_light.h"
 
 
 class RP_Forward_OpenGL : public RP_Forward {
@@ -51,6 +52,12 @@ private:
 	GLuint postTex = 0;
 	GLuint postDepthRB = 0;
 
+
+	std::unordered_map<GO_Light*, size_t> shadowMapIndices;	// light -> index into shadowMaps (static in rp_forward_opengl.cpp)
+	void updateShadowMaps(Scene* scene);
+	void updateShadowMapUniforms(Shader_OpenGL& shader);
+
+
 	GLuint lightsSSBO = 0;
 	size_t lightsSSBONumLights = 0;
 	static constexpr GLuint lightsSSBOBinding = 0;		// Must align with deferred_light.frag
@@ -80,7 +87,6 @@ private:
 
 	// Cache light volumes to avoid reallocating memory.
 	std::vector<std::pair<Sphere, float>> lightVolumes;
-
 
 
 

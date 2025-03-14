@@ -129,7 +129,7 @@ void setupDemoScene(Scene* scene, size_t num_lights) {
     scene->backgroundColor = 0.1f * glm::vec3(0.5f, 0.6f, 1.0f); //1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
 
     std::cout << "Loading scene\n"; 
-    Ref<GameObject> object = Assets::importObject(engine, "./samples/assets/pirates/pirates.gltf");
+    Ref<GameObject> object = Assets::importObject(engine, "./samples/shadows/shadow2/shadow2.gltf");
     if (!object) {
         std::cout << "Failed to load scene\n";
         exit(0);
@@ -160,11 +160,11 @@ void setupDemoScene(Scene* scene, size_t num_lights) {
     auto random = []() { return float(rand()) / float(RAND_MAX); };
     std::function<void(Ref<GameObject>)> dim_the_lights = [&dim_the_lights, &random](Ref<GameObject> root) {
         if (root->getTypeName() == "Light") {
-            constexpr float brightness = 0.001f; // 0.0001f
+            constexpr float brightness = 0.005f; // 0.0001f
             auto L = root.cast<GO_Light>();
             L->color *= brightness;
             if (L->type == GO_Light::Type::Directional) {
-                L->color *= 2.0f;
+                L->shadowType = GO_Light::ShadowType::Basic;
             }
             std::cout << "LIGHT: " << root->getName() << " | ";
             Utils::Print::vec3(root.cast<GO_Light>()->color);
@@ -175,7 +175,7 @@ void setupDemoScene(Scene* scene, size_t num_lights) {
     };
     dim_the_lights(object);
 
-    spawnLights(scene, num_lights);
+    //spawnLights(scene, num_lights);
 
     std::cout << "Scene graph:\n";
     Utils::Print::objectTree(scene->getRoot().get());
@@ -190,7 +190,7 @@ void argsError() {
 int main(int argc, char* argv[]) {
 
     RenderPipelineType pipeline = RenderPipelineType::Forward;
-    std::string pipeline_name = "forward-clustered-gpu";
+    std::string pipeline_name = "forward-none";
     glm::ivec3 numTiles = glm::ivec3(48, 27, 24);
     GLint maxLightsPerTile = 128;
     size_t num_lights = 50;

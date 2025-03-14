@@ -6,10 +6,13 @@ layout(local_size_x = 16, local_size_y = 9, local_size_z = 4) in;
 // Light parameters.
 // We always use vec4 to avoid common alignment bugs in the OpenGL drivers
 struct Light {
+    // Light type (x), shadow type (y), and shadow map index (z).
+    // Type and ShadowType match the enums in go_light.h.
+    // Type: None=0, Dir=1, Point=2, Spot=3.
+    // ShadowType: None=0, Basic=1
+    vec4 typeShadowIndex;		// vec3
     // Position (xyz) and type (w).
-    // Type matches the enum in go_light.h.
-    // None=0, Dir=1, Point=2, Spot=3.
-    vec4 positionType;			// vec4
+    vec4 position;				// vec3
     // Normalized direction for point and spot lights.
     vec4 direction;				// vec3
     // Inner & outer angles (radians) for spot lights.
@@ -45,12 +48,13 @@ layout(std430, binding = 0) buffer lightBuffer
 };
 Light getLightData(int idx) {
     Light l;
-    int offset = idx * 5;
-    l.positionType = lightData[offset + 0];
-    l.direction = lightData[offset + 1];
-    l.innerOuterAngles = lightData[offset + 2];
-    l.color = lightData[offset + 3];
-    l.attenuation = lightData[offset + 4];
+    int offset = idx * 6;
+    l.typeShadowIndex = lightData[offset + 0];
+    l.position = lightData[offset + 1];
+    l.direction = lightData[offset + 2];
+    l.innerOuterAngles = lightData[offset + 3];
+    l.color = lightData[offset + 4];
+    l.attenuation = lightData[offset + 5];
     return l;
 }
 
@@ -102,7 +106,7 @@ void main() {
         //Iterating within the current batch of lights
         for (uint light = 0; light < lightCount && light < threadCount; ++light) {
             Light l = getLightData(int(light));
-            if (l.positionType.w != 2.0 || testSphereAABB(light, tileIndex)) {
+            if (l.typeShadowIndex.x != 2.0 || testSphereAABB(light, tileIndex)) {
                 visibleLightIndices[visibleLightCount] = batch * threadCount + light;
                 visibleLightCount += 1;
             }
@@ -131,7 +135,7 @@ vec4 getBoundingSphere(Light light) {
     float color = max(max(light.color.r, light.color.g), light.color.b);
     float atten = light.attenuation.z;
     float rad = sqrt(color / (thresh * atten));
-    return vec4(light.positionType.xyz, rad);
+    return vec4(light.position.xyz, rad);
 }
 
 

@@ -1,5 +1,8 @@
 #version 430 core
 
+#define MAX_SHADOW_MAPS 4
+#define SHADOW_BIAS 0.001
+
 layout (location = 0) out vec4 outColor;
 
 
@@ -28,15 +31,22 @@ uniform float zNear;
 uniform float zFar;
 
 
+// Shadow Maps
+uniform sampler2D shadowMaps[MAX_SHADOW_MAPS];
+
+
 
 
 // Light parameters.
 // We always use vec4 to avoid common alignment bugs in the OpenGL drivers
 struct Light {
+	// Light type (x), shadow type (y), and shadow map index (z).
+	// Type and ShadowType match the enums in go_light.h.
+	// Type: None=0, Dir=1, Point=2, Spot=3.
+	// ShadowType: None=0, Basic=1
+	vec4 typeShadowIndex;		// vec3
 	// Position (xyz) and type (w).
-	// Type matches the enum in go_light.h.
-	// None=0, Dir=1, Point=2, Spot=3.
-	vec4 positionType;			// vec4
+	vec4 position;				// vec3
 	// Normalized direction for point and spot lights.
 	vec4 direction;				// vec3
 	// Inner & outer angles (radians) for spot lights.
@@ -62,13 +72,14 @@ const float PI = 3.14159265358979323;
 
 
 
-// This is the data we're receiving from the vertex shader..
+// This is the data we're receiving from the vertex shader.
 // "attribs" is the name of the data block (must match in vert shader).
 // "fs_in" is a local name we give it in this shader file.
 in attribs {
 	vec3 position;
 	vec2 uv;
 	mat3 TBN;
+	vec4 shadowMapCoords[MAX_SHADOW_MAPS];
 } fs_in;
 
 
@@ -83,7 +94,7 @@ float DistributionGGX(vec3 N, vec3 H, float roughness)
     float denom = (NdotH2 * (a2 - 1.0) + 1.0);
     denom = PI * denom * denom;
 	
-    return num / denom;
+    return num / max(denom, 0.001);
 }
 
 float GeometrySchlickGGX(float NdotV, float roughness)
@@ -94,7 +105,7 @@ float GeometrySchlickGGX(float NdotV, float roughness)
     float num   = NdotV;
     float denom = NdotV * (1.0 - k) + k;
 	
-    return num / denom;
+    return num / max(denom, 0.0001);
 }
 
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
@@ -167,6 +178,86 @@ float computeAttenuation(float dist, vec3 attenuation) {
 }
 
 
+
+float computeShadowBasic2(int idx, vec3 UVZ, vec3 normal, vec3 dirToLight) {
+	float shadowZ = texture(shadowMaps[idx], UVZ.xy).r;
+	// Bias
+	shadowZ += SHADOW_BIAS / (dot(normal, dirToLight) + 0.1);
+
+	if (UVZ.z > shadowZ)
+		return 0.0;
+	else
+		return 1.0;
+}
+
+
+/////////////// TEMP
+
+// A single iteration of Bob Jenkins' One-At-A-Time hashing algorithm.
+uint hash( uint x ) {
+    x += ( x << 10u );
+    x ^= ( x >>  6u );
+    x += ( x <<  3u );
+    x ^= ( x >> 11u );
+    x += ( x << 15u );
+    return x;
+}
+// Compound versions of the hashing algorithm I whipped together.
+uint hash( uvec2 v ) { return hash( v.x ^ hash(v.y)                         ); }
+uint hash( uvec3 v ) { return hash( v.x ^ hash(v.y) ^ hash(v.z)             ); }
+uint hash( uvec4 v ) { return hash( v.x ^ hash(v.y) ^ hash(v.z) ^ hash(v.w) ); }
+// Construct a float with half-open range [0:1] using low 23 bits.
+// All zeroes yields 0.0, all ones yields the next smallest representable value below 1.0.
+float floatConstruct( uint m ) {
+    const uint ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
+    const uint ieeeOne      = 0x3F800000u; // 1.0 in IEEE binary32
+
+    m &= ieeeMantissa;                     // Keep only mantissa bits (fractional part)
+    m |= ieeeOne;                          // Add fractional part to 1.0
+
+    float  f = uintBitsToFloat( m );       // Range [1:2]
+    return f - 1.0;                        // Range [0:1]
+}
+// Pseudo-random value in half-open range [0:1].
+float random( float x ) { return floatConstruct(hash(floatBitsToUint(x))); }
+float random( vec2  v ) { return floatConstruct(hash(floatBitsToUint(v))); }
+float random( vec3  v ) { return floatConstruct(hash(floatBitsToUint(v))); }
+float random( vec4  v ) { return floatConstruct(hash(floatBitsToUint(v))); }
+
+/////////////// TEMP
+
+
+
+// TODO: Make this its own type
+float computeShadowBasic(int idx, vec3 UVZ, vec3 normal, vec3 dirToLight) {
+
+	vec2 texelStep = 1.0 / vec2(textureSize(shadowMaps[idx], 0).xy);
+	int radius = 1;
+	float total = 0.0;
+	float weight = 0.0;
+
+	for (int s = 0; s < 10; s++) {	// num samples
+		for (int x = -radius; x <= radius; x++) {
+			for (int y = -radius; y <= radius; y++) {
+			
+				vec2 rand = vec2(random(gl_FragCoord.xy*3 + vec2(x,y) + UVZ.x * s), random(gl_FragCoord.xy*3 + vec2(x,y) + UVZ.y * s));
+				float shadowZ = texture(shadowMaps[idx], UVZ.xy + (vec2(x,y) + rand) * texelStep).r;
+				// Bias
+				shadowZ += SHADOW_BIAS / (dot(normal, dirToLight) + 0.1);
+
+				float w = 1.0 / (1.0 + sqrt(float(x*x) + float(y*y)));
+				weight += w;
+				if (UVZ.z <= shadowZ)
+					total += w;
+			}
+		}
+	}
+	
+	return total / weight;
+}
+
+
+
 vec3 processLight(
 	Light light,		// the light to process
 	vec3 position,		// position of the fragment
@@ -175,7 +266,7 @@ vec3 processLight(
 	float roughness,	// roughness of the surface
 	vec3 normal			// normal of surface
 ) {
-	float type = round(light.positionType.w);
+	float type = round(light.typeShadowIndex.x);
 	if (type == 0.0) {
 		return vec3(0.0);
 	}
@@ -189,7 +280,7 @@ vec3 processLight(
 	}
 	else if (type == 2.0) {
 		// Point.
-		vec3 diff = light.positionType.xyz - position;
+		vec3 diff = light.position.xyz - position;
 		dirToLight = normalize(diff);
 		lightColor *= computeAttenuation(length(diff), vec3(light.attenuation));
 	}
@@ -197,7 +288,24 @@ vec3 processLight(
 		// Spot.
 	}
 
-	return computeLightFromDir(
+	float shadowFac = 1.0;
+	float shadowType = round(light.typeShadowIndex.y);
+	if (shadowType != 0.0) {
+		int shadowIdx = int(round(light.typeShadowIndex.z));
+		vec4 c = fs_in.shadowMapCoords[shadowIdx];
+		vec3 UVZ = (c.xyz / c.w) * 0.5 + 0.5;
+		if (UVZ.x < 0.0 || UVZ.x > 1.0 ||
+			UVZ.y < 0.0 || UVZ.y > 1.0 ||
+			UVZ.z < 0.0 || UVZ.z > 1.0) {
+			/* do nothing. */
+			shadowFac = 1.0;
+		}
+		else if (shadowType == 1.0) {
+			shadowFac = computeShadowBasic(shadowIdx, UVZ, normal, dirToLight);
+		}
+	}
+
+	return shadowFac * computeLightFromDir(
 		dirToLight,
 		-normalize(position),
 		lightColor,
@@ -219,12 +327,13 @@ layout(std430, binding = 0) buffer lightBuffer
 };
 Light getLightData(int idx) {
 	Light l;
-	int offset = idx * 5;
-	l.positionType = lightData[offset + 0];
-	l.direction = lightData[offset + 1];
-	l.innerOuterAngles = lightData[offset + 2];
-	l.color = lightData[offset + 3];
-	l.attenuation = lightData[offset + 4];
+	int offset = idx * 6;
+	l.typeShadowIndex = lightData[offset + 0];
+	l.position = lightData[offset + 1];
+	l.direction = lightData[offset + 2];
+	l.innerOuterAngles = lightData[offset + 3];
+	l.color = lightData[offset + 4];
+	l.attenuation = lightData[offset + 5];
 	return l;
 }
 
@@ -249,7 +358,7 @@ vec4 getBoundingSphere(Light light) {
 	float color = max(max(light.color.r, light.color.g), light.color.b);
 	float atten = light.attenuation.z;
 	float rad = sqrt(color / (thresh * atten));
-	return vec4(light.positionType.xyz, rad);
+	return vec4(light.position.xyz, rad);
 }
 
 
@@ -270,14 +379,14 @@ void main() {
 
 	// Sample the metalness.
 	float metalness = mix(
-		texture(textureMetalness, fs_in.uv).r,
+		texture(textureMetalness, fs_in.uv).b,	// TODO: idk why it's in the blue channel, should be red :/
 		metalnessFac.r,
 		metalnessFac.g
 	);
 
 	// Sample the roughness.
 	float roughness = mix(
-		texture(textureRoughness, fs_in.uv).r,
+		texture(textureRoughness, fs_in.uv).g,	// TODO: idk why it's in the green channel, should be red :/
 		roughnessFac.r,
 		roughnessFac.g
 	);
@@ -316,7 +425,7 @@ void main() {
 		for (int i = 0; i < numLights.x; i++) {
 			Light l = getLightData(i);
 			vec4 boundingSphere = getBoundingSphere(l);
-			if (l.positionType.w == 2.0 &&
+			if (l.typeShadowIndex.x == 2.0 &&
 				distance(fs_in.position, boundingSphere.xyz) >= boundingSphere.w) {
 				// Outside the sphere, cull the light
 				continue;
@@ -359,7 +468,7 @@ void main() {
 				roughness,
 				normal
 			), 0.0);
-			if (light.positionType.w == 2.0)
+			if (light.typeShadowIndex.x == 2.0)
 				color += 0.01 * vec4(light.color.rgb, 0.0);
 		}
 	}

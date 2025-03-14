@@ -9,6 +9,122 @@
 
 #include <iostream>
 
+#define MAX_SHADOW_MAPS 4
+#define SHADOW_MAP_SIZE 2048
+#define SHADOW_MAP_TEX_INDEX 4 // larger than the highest active texture used for materials
+
+
+static void renderSubtree(
+	Shader_OpenGL& shader, GameObject* obj,
+	const glm::mat4& viewMat, const glm::mat4 projMat
+) {
+
+	glm::mat4 mMat = obj->getModelMatrix();
+	glm::mat4 mvMat = viewMat * mMat;
+	glm::mat4 mvpMat = projMat * mvMat;
+	shader.setUniformMat4("mMat", mMat);
+	shader.setUniformMat4("mvMat", mvMat);
+	shader.setUniformMat4("normalMat", glm::inverse(glm::transpose(mvMat)));
+	shader.setUniformMat4("mvpMat", mvpMat);
+
+	obj->draw();
+
+	for (auto& child : obj->getChildren()) {
+		renderSubtree(shader, child.get(), viewMat, projMat);
+	}
+}
+
+
+class ShadowMap {
+private:
+
+	GLuint depthMapFBO = 0;
+	GLuint depthMap = 0;
+
+	GLsizei width;
+	GLsizei height;
+
+public:
+	
+	ShadowMap(
+		size_t width = SHADOW_MAP_SIZE,
+		size_t height = SHADOW_MAP_SIZE
+	) {
+		this->width = (GLsizei)width;
+		this->height = (GLsizei)height;
+		glGenFramebuffers(1, &this->depthMapFBO);
+		glGenTextures(1, &this->depthMap);
+		glBindTexture(GL_TEXTURE_2D, this->depthMap);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+			(GLsizei)width, (GLsizei)height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, this->depthMapFBO);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, this->depthMap, 0);
+		glDrawBuffer(GL_NONE);
+		glReadBuffer(GL_NONE);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+	ShadowMap(ShadowMap& other) { *this = other; }
+	ShadowMap(ShadowMap&& other) { *this = other; }
+	ShadowMap& operator=(ShadowMap& other) { return *this = std::move(other); }
+	ShadowMap& operator=(ShadowMap&& other) {
+		this->width = other.width;
+		this->height = other.height;
+		this->depthMapFBO = other.depthMapFBO;
+		this->depthMap = other.depthMap;
+		other.depthMapFBO = 0;
+		other.depthMap = 0;
+		return *this;
+	}
+
+	~ShadowMap() {
+		if (glIsFramebuffer(this->depthMapFBO)) {
+			glDeleteFramebuffers(1, &this->depthMapFBO);
+			this->depthMapFBO = 0;
+		}
+		if (glIsTexture(this->depthMap)) {
+			glDeleteTextures(1, &this->depthMap);
+			this->depthMap = 0;
+		}
+	}
+
+	GLuint getTexID() { return this->depthMap; }
+
+	static glm::mat4 lightToViewMat(GO_Light* light) {
+		return glm::inverse(light->getModelMatrix());
+	}
+
+	void renderSubtree(GO_Light* light, Shader_OpenGL& shader, GameObject* root) {
+		GLint currFBO, currCull;
+		GLint vp[4];
+		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &currFBO);
+		glGetIntegerv(GL_CULL_FACE_MODE, &currCull);
+		glGetIntegerv(GL_VIEWPORT, vp);
+
+		glm::mat4 proj = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+
+		glViewport(0, 0, this->width, this->height);
+		glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+		glCullFace(GL_FRONT);
+		glClear(GL_DEPTH_BUFFER_BIT);
+		shader.bind();
+		::renderSubtree(shader, root, lightToViewMat(light), proj);
+
+		glViewport(vp[0], vp[1], (GLsizei)vp[2], (GLsizei)vp[3]);
+		glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)currFBO);
+		glCullFace((GLenum)currCull);
+	}
+
+
+};
+
+static std::vector<ShadowMap> shadowMaps;	// Max size is MAX_SHADOW_MAPS
+
+
 
 
 RP_Forward_OpenGL::RP_Forward_OpenGL(Graphics& graphics) : RP_Forward(graphics) {}
@@ -133,24 +249,6 @@ static void bindMaterial(Shader_OpenGL& shader, Ref<Material> material) {
 	}
 }
 
-static void renderSubtree(
-	Shader_OpenGL& shader, GameObject* obj,
-	const glm::mat4& viewMat, const glm::mat4 projMat
-) {
-
-	glm::mat4 mvMat = viewMat * obj->getModelMatrix();
-	glm::mat4 mvpMat = projMat * mvMat;
-	shader.setUniformMat4("mvMat", mvMat);
-	shader.setUniformMat4("normalMat", glm::inverse(glm::transpose(mvMat)));
-	shader.setUniformMat4("mvpMat", mvpMat);
-
-	obj->draw();
-
-	for (auto& child : obj->getChildren()) {
-		renderSubtree(shader, child.get(), viewMat, projMat);
-	}
-}
-
 void RP_Forward_OpenGL::render(Scene* scene) {
 
 	glBindFramebuffer(GL_FRAMEBUFFER, this->postFBO);
@@ -186,6 +284,7 @@ void RP_Forward_OpenGL::render(Scene* scene) {
 
 
 	this->updateLightsSSBO(scene, viewMatrix);
+	this->updateShadowMaps(scene);
 	if (this->culling == LightCulling::ClusteredGPU) {
 		this->runClustersGPU(scene);
 	}
@@ -196,6 +295,7 @@ void RP_Forward_OpenGL::render(Scene* scene) {
 	this->forwardShader.setUniform2i("cullingMethod", glm::ivec2((GLint)this->culling, 0));
 	this->forwardShader.setUniform2f("viewportSize", glm::vec2((float)this->width, (float)this->height));
 	this->forwardShader.setUniform3f("numTiles", glm::vec3(this->numTiles));
+	updateShadowMapUniforms(this->forwardShader);
 
 	glDepthMask(GL_FALSE);
 	renderSubtree(this->forwardShader, scene->getRoot().get(), viewMatrix, projMatrix);
@@ -423,15 +523,67 @@ void RP_Forward_OpenGL::renderPrimitive(
 
 
 
+void RP_Forward_OpenGL::updateShadowMaps(Scene* scene) {
+	this->forwardShader.bind();
+
+	std::vector<GO_Light*>& lights = scene->lights;
+	// Shadow maps are first-come first-serve.
+	// If there are more than MAX_SHADOW_MAPS lights with shadows enabled,
+	// only the first ones found will get shadow maps.
+	size_t shadow_map_index = 0;
+	for (GO_Light* light : lights) {
+		if (light->shadowType != GO_Light::ShadowType::Disabled) {
+			if (shadow_map_index < MAX_SHADOW_MAPS) {
+				if (shadow_map_index >= shadowMaps.size()) {
+					shadowMaps.push_back(ShadowMap());
+				}
+				shadowMapIndices[light] = shadow_map_index;
+				shadowMaps[shadow_map_index].renderSubtree(
+					light,
+					this->zprepassShader,	// re-use
+					scene->getRoot().get()
+				);
+
+				if (++shadow_map_index >= MAX_SHADOW_MAPS)
+					break;
+			}
+			else {
+				shadowMapIndices.erase(light);
+			}
+		}
+	}
+	// TODO: erase unused shadow maps
+}
+
+void RP_Forward_OpenGL::updateShadowMapUniforms(Shader_OpenGL& shader) {
+	for (auto& [light, index] : this->shadowMapIndices) {
+		if (index >= shadowMaps.size()) continue;
+		this->forwardShader.setUniformTex(
+			"shadowMaps[" + std::to_string(index) + "]",
+			shadowMaps[index].getTexID(),
+			SHADOW_MAP_TEX_INDEX + index, GL_TEXTURE_2D
+		);
+		this->forwardShader.setUniformMat4(
+			"shadowMapMats[" + std::to_string(index) + "]",
+			glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) * ShadowMap::lightToViewMat(light)
+		);
+	}
+}
+
+
+
 
 // We use all vec4s to avoid common alignment bugs in the OpenGL drivers.
 struct SSBOLight {
+	// Light type (x), shadow type (y), and shadow map index (z).
+	// Type and ShadowType match the enums in go_light.h.
+	// Type: None=0, Dir=1, Point=2, Spot=3.
+	// ShadowType: None=0, Basic=1
+	glm::vec4 typeShadowIndex;		// vec3
 	// Position (xyz) and type (w).
-	// Type matches the enum in go_light.h.
-	// None=0, Dir=1, Point=2, Spot=3.
-	glm::vec4 positionType;			// vec4
+	glm::vec4 position;				// vec3
 	// Normalized direction for point and spot lights.
-	glm::vec4 direction;			// vec3
+	glm::vec4 direction;				// vec3
 	// Inner & outer angles (radians) for spot lights.
 	glm::vec4 innerOuterAngles;		// vec2
 	// Color.
@@ -467,7 +619,10 @@ void RP_Forward_OpenGL::updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix) {
 		SSBOLight* dst_light = ((SSBOLight*)(buf + sizeof(glm::ivec4))) + i;
 		glm::vec4 posVector = viewMatrix * src_light->getModelMatrix()[3];
 		glm::vec4 dirVector = viewMatrix * glm::vec4(src_light->getWorldSpaceDirection(), 0.0f);
-		dst_light->positionType = glm::vec4(glm::vec3(posVector), (float)src_light->type);
+		auto shadowMapIndexIt = shadowMapIndices.find(src_light);
+		float shadowMapIndex = (shadowMapIndexIt == shadowMapIndices.end()) ? -1.0f : float(shadowMapIndexIt->second);
+		dst_light->typeShadowIndex = glm::vec4((float)src_light->type, (float)src_light->shadowType, shadowMapIndex, 0.0f);
+		dst_light->position = glm::vec4(glm::vec3(posVector), 0.0f);
 		dst_light->direction = glm::vec4(glm::normalize(glm::vec3(dirVector)), 0.0f);
 		dst_light->innerOuterAngles = glm::vec4(src_light->innerOuterAngles, 0.0f, 0.0f);
 		dst_light->color = glm::vec4(src_light->color, 0.0f);
@@ -636,7 +791,7 @@ void RP_Forward_OpenGL::runTilesCPU(Scene* scene) {
 				GO_Light* light = scene->lights[i];
 
 				// Detect if light intersects tile:
-				auto lv = lightVolumes[i];
+				const auto& lv = lightVolumes[i];
 				if (light->type != GO_Light::Type::Point ||
 					lightIntersectsFrustum(camera, lv.first, lv.second, tileBounds, nearFar)) {
 					tileLights.push_back(i);

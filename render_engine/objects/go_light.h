@@ -17,11 +17,19 @@ public:
 		Spot = 3,
 	};
 
+	enum class ShadowType {
+		Disabled = 0,
+		Basic = 1,
+	};
+
 	virtual void setScene(Ref<Scene> scene) override;
 
 
 	// The type of light.
 	Type type = Type::Point;
+
+	// The type of shadow.
+	ShadowType shadowType = ShadowType::Disabled;
 
 	// Directional, Spot
 	glm::vec3 direction;

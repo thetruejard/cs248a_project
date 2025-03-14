@@ -57,10 +57,10 @@ private:
 	glm::vec4 diffuseColor;
 
 	Ref<Texture> metalnessTexture;
-	float metalness;
+	float metalness = 0.0f;
 
 	Ref<Texture> roughnessTexture;
-	float roughness;
+	float roughness = 0.5f;
 
 	Ref<Texture> normalTexture;
 
