@@ -16,6 +16,7 @@
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
 
+#include "glm/gtc/matrix_transform.hpp"
 
 #include <iostream>
 #include <vector>
@@ -48,6 +49,45 @@ public:
         this->phase += speed;
     }
 };
+
+
+class Pivoting : public Component {
+public:
+    glm::mat4 orig;
+    float rot = 0.0;
+    GameObject* go;
+
+    Pivoting(GameObject* go) : Component(go) {
+        this->go = go;
+        orig = go->getLocalMatrix();
+    }
+
+    void evaluate(float deltaTime) override {
+        this->go->setLocalMatrix(glm::rotate(this->orig, this->rot, glm::vec3(0.0f, 1.0f, 0.0f))); 
+        this->rot += 2.0f*PI/300.0f;
+    }
+};
+
+
+class ChangeRadius : public Component {
+public:
+    float phase = 0.0f;
+    float init_rad;
+    GO_Light* go;
+
+    ChangeRadius(GameObject* go) : Component(go) {
+        auto random = []() { return float(rand()) / float(RAND_MAX); };
+        this->go = (GO_Light*)go;
+        this->init_rad = this->go->radius;
+    }
+
+    void evaluate(float deltaTime) override {
+        this->go->radius = this->init_rad * exp(sin(this->phase));
+        this->phase += 4.0f * PI / 300.0f;
+    }
+};
+
+
 
 
 
@@ -124,12 +164,12 @@ void spawnLights(Scene* scene, size_t num_lights) {
 }
 
 
-void setupDemoScene(Scene* scene, size_t num_lights) {
+void setupDemoScene(Scene* scene, size_t num_lights, std::string force_shadows, bool pivoting, bool changerad) {
 
     scene->backgroundColor = 0.1f * glm::vec3(0.5f, 0.6f, 1.0f); //1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
 
     std::cout << "Loading scene\n"; 
-    Ref<GameObject> object = Assets::importObject(engine, "./samples/shadows/shadow2/shadow2.gltf");
+    Ref<GameObject> object = Assets::importObject(engine, "./samples/shadows/shadow4/shadow4.gltf");
     if (!object) {
         std::cout << "Failed to load scene\n";
         exit(0);
@@ -148,7 +188,8 @@ void setupDemoScene(Scene* scene, size_t num_lights) {
     // Make the camera appear third-person-ish by moving it backwards relative to the controller.
     Ref<GO_Camera> camera = engine.createObject<GO_Camera>();
     camera->setPosition(0.0f, 0.0f, 1.0f);
-    camera->setPerspective(glm::radians(70.0f), 1920.0f / 1080.0f, 0.1f, 100.0f);
+    float fov = 22.0f; // 70 standard, 22 for dolly vid
+    camera->setPerspective(glm::radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
     camera->setParent(controller, false);
     scene->addObject(controller);
     scene->setActiveCamera(camera);
@@ -158,13 +199,37 @@ void setupDemoScene(Scene* scene, size_t num_lights) {
     // Dim the lights, since blender exports them super bright.
     // Also give random colors, just for fun.
     auto random = []() { return float(rand()) / float(RAND_MAX); };
-    std::function<void(Ref<GameObject>)> dim_the_lights = [&dim_the_lights, &random](Ref<GameObject> root) {
+    std::function<void(Ref<GameObject>)> dim_the_lights = [&dim_the_lights, &random,
+        &force_shadows, &pivoting, &changerad](Ref<GameObject> root) {
+
+        if (root->getName() == "PIVOT" && pivoting)
+            root->addComponent<Pivoting>();
         if (root->getTypeName() == "Light") {
-            constexpr float brightness = 0.005f; // 0.0001f
+            constexpr float brightness = 0.002f; // 0.0001f
             auto L = root.cast<GO_Light>();
             L->color *= brightness;
+            L->radius = 0.08f;
             if (L->type == GO_Light::Type::Directional) {
-                L->shadowType = GO_Light::ShadowType::Basic;
+                std::string n = (force_shadows != "") ? force_shadows : L->getName();
+                if (n.length() >= 5 && n.substr(n.length() - 5) == "_none")
+                    L->shadowType = GO_Light::ShadowType::DisabledClip;
+                else if (n.length() >= 6 && n.substr(n.length() - 6) == "_basic")
+                    L->shadowType = GO_Light::ShadowType::Basic;
+                else if (n.length() >= 4 && n.substr(n.length() - 4) == "_pcf")
+                    L->shadowType = GO_Light::ShadowType::PCF;
+                else if (n.length() >= 12 && n.substr(n.length() - 12) == "_filteredpcf")
+                    L->shadowType = GO_Light::ShadowType::FilteredPCF;
+                else if (n.length() >= 5 && n.substr(n.length() - 5) == "_pcss")
+                    L->shadowType = GO_Light::ShadowType::PCSS;
+                else if (n.length() >= 9 && n.substr(n.length() - 9) == "_raymarch") {
+                    L->shadowType = GO_Light::ShadowType::RayMarching;
+                    //L->radius *= 0.25f; // not ideal :/
+                }
+                else
+                    L->shadowType = GO_Light::ShadowType::Basic;
+
+                if (changerad)
+                    L->addComponent<ChangeRadius>();
             }
             std::cout << "LIGHT: " << root->getName() << " | ";
             Utils::Print::vec3(root.cast<GO_Light>()->color);
@@ -176,6 +241,7 @@ void setupDemoScene(Scene* scene, size_t num_lights) {
     dim_the_lights(object);
 
     //spawnLights(scene, num_lights);
+
 
     std::cout << "Scene graph:\n";
     Utils::Print::objectTree(scene->getRoot().get());
@@ -194,8 +260,12 @@ int main(int argc, char* argv[]) {
     glm::ivec3 numTiles = glm::ivec3(48, 27, 24);
     GLint maxLightsPerTile = 128;
     size_t num_lights = 50;
+    bool pivoting = false;
+    bool changerad = false;
+    std::string force_shadows = "";
     std::filesystem::path log_file;
     std::filesystem::path render_dir;
+    std::filesystem::path campose_file;
     bool interactive = true;
 
     srand(1);
@@ -257,6 +327,11 @@ int main(int argc, char* argv[]) {
                 argsError();
             maxLightsPerTile = (GLint)std::stoi(args[i]);
         }
+        else if (args[i] == "--shadows") {
+            if (++i == args.size())
+                argsError();
+            force_shadows = "_" + args[i];
+        }
         else if (args[i] == "--log-file") {
             if (++i == args.size())
                 argsError();
@@ -267,13 +342,25 @@ int main(int argc, char* argv[]) {
                 argsError();
             render_dir = args[i];
         }
+        else if (args[i] == "--campose-file") {
+            if (++i == args.size())
+                argsError();
+            campose_file = args[i];
+        }
         else if (args[i] == "--eval") {
             interactive = false;
         }
         else if (args[i] == "--interactive" || args[i] == "-I") {
             interactive = true;
         }
+        else if (args[i] == "--pivoting") {
+            pivoting = true;
+        }
+        else if (args[i] == "--changerad") {
+            changerad = true;
+        }
         else {
+            std::cout << "Unknown argument: " << args[i] << "\n";
             argsError();
         }
     }
@@ -338,9 +425,9 @@ int main(int argc, char* argv[]) {
     std::cout << "lights: " << num_lights << "\n";
     std::cout << "pipeline: " << pipeline_name << "\n";
 
-
+     
     Ref<Scene> scene = engine.createScene();
-    setupDemoScene(scene.get(), num_lights);
+    setupDemoScene(scene.get(), num_lights, force_shadows, pivoting, changerad);
     engine.setActiveScene(scene);
 
     if (interactive) {
@@ -348,7 +435,7 @@ int main(int argc, char* argv[]) {
     }
     else {
         // Load camera path
-        std::ifstream campath_file("samples/assets/pirates/camera_traj.json");
+        std::ifstream campath_file(campose_file);
         json campath = json::parse(campath_file);
         std::vector<float> cam_mats;
         size_t num_cam_mats = campath.size();

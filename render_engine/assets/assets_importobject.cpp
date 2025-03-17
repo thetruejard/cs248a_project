@@ -9,6 +9,8 @@
 
 #include <iostream>
 #include <unordered_map>
+#include <map>
+#include <filesystem>
 
 
 
@@ -28,6 +30,10 @@ public:
 
     // Same size as this->scene->mTextures.
     std::vector<Ref<Texture>> embeddedTextures;
+    
+    // External (non-embedded) textures. NOT included in this->scene->mTextures.
+    // TODO: Change to allow semantic comparison/symlinks
+    std::map<std::filesystem::path,Ref<Texture>> externalTextures;
 
     // A mapping from node names to light objects.
     std::unordered_map<std::string, aiLight*> lights;
@@ -93,7 +99,16 @@ static Ref<Texture> processTexture(importObject_Context& context, std::string te
             texturePath.replace(n, 3, " ");
             n += 1;
         }
-        return Assets::importTexture(*context.engine, context.directory / texturePath);
+        std::filesystem::path fullPath = context.directory / texturePath;
+        auto result = context.externalTextures.find(fullPath);
+        if (result != context.externalTextures.end()) {
+            std::cout << "Reusing " << fullPath << "\n";
+            return result->second;
+        }
+        std::cout << "Loading " << fullPath << "\n";
+        Ref<Texture> tex = Assets::importTexture(*context.engine, fullPath);
+        context.externalTextures[fullPath] = tex;
+        return tex;
     }
 }
 

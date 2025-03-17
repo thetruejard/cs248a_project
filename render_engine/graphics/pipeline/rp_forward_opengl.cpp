@@ -9,8 +9,8 @@
 
 #include <iostream>
 
-#define MAX_SHADOW_MAPS 4
-#define SHADOW_MAP_SIZE 2048
+#define MAX_SHADOW_MAPS 16
+#define SHADOW_MAP_SIZE 1024 // 256 for dolly vid
 #define SHADOW_MAP_TEX_INDEX 4 // larger than the highest active texture used for materials
 
 
@@ -232,6 +232,11 @@ static void bindMaterial(Shader_OpenGL& shader, Ref<Material> material) {
 				3, GL_TEXTURE_2D
 			);
 		}
+
+		shader.setUniform2i("metalRoughChannels",
+			(material->getRoughnessTexture() == material->getMetalnessTexture()) ?
+			glm::ivec2(2, 1) : glm::ivec2(0, 0)
+		);
 
 		// TODO: TEMP
 		if (material->wireframe) {
@@ -567,6 +572,10 @@ void RP_Forward_OpenGL::updateShadowMapUniforms(Shader_OpenGL& shader) {
 			"shadowMapMats[" + std::to_string(index) + "]",
 			glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f) * ShadowMap::lightToViewMat(light)
 		);
+		this->forwardShader.setUniform3f(
+			"shadowScales[" + std::to_string(index) + "]",
+			light->getScale()
+		);
 	}
 }
 
@@ -575,15 +584,15 @@ void RP_Forward_OpenGL::updateShadowMapUniforms(Shader_OpenGL& shader) {
 
 // We use all vec4s to avoid common alignment bugs in the OpenGL drivers.
 struct SSBOLight {
-	// Light type (x), shadow type (y), and shadow map index (z).
+	// Light type (x), shadow type (y), shadow map index (z), and radius (w).
 	// Type and ShadowType match the enums in go_light.h.
 	// Type: None=0, Dir=1, Point=2, Spot=3.
 	// ShadowType: None=0, Basic=1
-	glm::vec4 typeShadowIndex;		// vec3
+	glm::vec4 typeShadowIndexRadius;	// vec4
 	// Position (xyz) and type (w).
 	glm::vec4 position;				// vec3
 	// Normalized direction for point and spot lights.
-	glm::vec4 direction;				// vec3
+	glm::vec4 direction;			// vec3
 	// Inner & outer angles (radians) for spot lights.
 	glm::vec4 innerOuterAngles;		// vec2
 	// Color.
@@ -621,7 +630,8 @@ void RP_Forward_OpenGL::updateLightsSSBO(Scene* scene, glm::mat4 viewMatrix) {
 		glm::vec4 dirVector = viewMatrix * glm::vec4(src_light->getWorldSpaceDirection(), 0.0f);
 		auto shadowMapIndexIt = shadowMapIndices.find(src_light);
 		float shadowMapIndex = (shadowMapIndexIt == shadowMapIndices.end()) ? -1.0f : float(shadowMapIndexIt->second);
-		dst_light->typeShadowIndex = glm::vec4((float)src_light->type, (float)src_light->shadowType, shadowMapIndex, 0.0f);
+		dst_light->typeShadowIndexRadius = glm::vec4(
+			(float)src_light->type, (float)src_light->shadowType,shadowMapIndex, src_light->radius);
 		dst_light->position = glm::vec4(glm::vec3(posVector), 0.0f);
 		dst_light->direction = glm::vec4(glm::normalize(glm::vec3(dirVector)), 0.0f);
 		dst_light->innerOuterAngles = glm::vec4(src_light->innerOuterAngles, 0.0f, 0.0f);

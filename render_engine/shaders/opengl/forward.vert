@@ -1,6 +1,6 @@
 #version 430 core
 
-#define MAX_SHADOW_MAPS 4
+#define MAX_SHADOW_MAPS 16
 
 layout (location = 0) in vec3 position;
 layout (location = 1) in vec3 normal;
@@ -43,7 +43,7 @@ void main() {
 
 	// Transform point to shadow map spaces.
 	for (int i = 0; i < MAX_SHADOW_MAPS; i++) {
-		vs_out.shadowMapCoords[i] = shadowMapMats[i] * mMat * vec4(position, 1.0);;
+		vs_out.shadowMapCoords[i] = shadowMapMats[i] * mMat * vec4(position, 1.0);
 	}
 
 	gl_Position = mvpMat * vec4(position, 1.0);

@@ -20,6 +20,11 @@ public:
 	enum class ShadowType {
 		Disabled = 0,
 		Basic = 1,
+		PCF = 2,
+		FilteredPCF = 3,
+		PCSS = 4,
+		RayMarching = 5,
+		DisabledClip = 6,	// TEMP; disabled with boundary clipping
 	};
 
 	virtual void setScene(Ref<Scene> scene) override;
@@ -35,6 +40,8 @@ public:
 	glm::vec3 direction;
 	// Spot
 	glm::vec2 innerOuterAngles;
+	// All. Radians for Directional.
+	float radius = 0.0f;
 
 	// Color (may not be clamped).
 	glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f);
