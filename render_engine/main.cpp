@@ -226,7 +226,7 @@ void setupDemoScene(std::string path, Scene* scene, size_t num_lights, std::stri
                     //L->radius *= 0.25f; // not ideal :/
                 }
                 else
-                    L->shadowType = GO_Light::ShadowType::Basic;
+                    L->shadowType = GO_Light::ShadowType::PCSS;
 
                 if (changerad)
                     L->addComponent<ChangeRadius>();
@@ -263,7 +263,7 @@ int main(int argc, char* argv[]) {
     bool pivoting = false;
     bool changerad = false;
     std::string force_shadows = "";
-    std::string scene_path = "./samples/shadows/shadow4/shadow4.gltf";
+    std::string scene_path = "./samples/shadows/demo1/demo1.gltf";
     std::filesystem::path log_file;
     std::filesystem::path render_dir;
     std::filesystem::path campose_file;
