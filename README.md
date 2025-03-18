@@ -42,7 +42,7 @@ The following options are supported (default values can be viewed or changed by 
 
 ## Results
 
-![Sample shadow images](docs/sample_images.png)
+![Sample shadow images](docs/main_demo.png)
 
 See a video overview [here](https://drive.google.com/file/d/1fC4ZWOZHaT7eM9xLLNy3sxiPGZ83Andv/view?usp=sharing)
 
