@@ -164,12 +164,12 @@ void spawnLights(Scene* scene, size_t num_lights) {
 }
 
 
-void setupDemoScene(Scene* scene, size_t num_lights, std::string force_shadows, bool pivoting, bool changerad) {
+void setupDemoScene(std::string path, Scene* scene, size_t num_lights, std::string force_shadows, bool pivoting, bool changerad) {
 
     scene->backgroundColor = 0.1f * glm::vec3(0.5f, 0.6f, 1.0f); //1.3f * glm::vec3(0.5f, 0.6f, 1.0f);
 
     std::cout << "Loading scene\n"; 
-    Ref<GameObject> object = Assets::importObject(engine, "./samples/shadows/shadow4/shadow4.gltf");
+    Ref<GameObject> object = Assets::importObject(engine, path);
     if (!object) {
         std::cout << "Failed to load scene\n";
         exit(0);
@@ -188,7 +188,7 @@ void setupDemoScene(Scene* scene, size_t num_lights, std::string force_shadows, 
     // Make the camera appear third-person-ish by moving it backwards relative to the controller.
     Ref<GO_Camera> camera = engine.createObject<GO_Camera>();
     camera->setPosition(0.0f, 0.0f, 1.0f);
-    float fov = 22.0f; // 70 standard, 22 for dolly vid
+    float fov = 70.0f; // 70 standard, 22 for dolly vid
     camera->setPerspective(glm::radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
     camera->setParent(controller, false);
     scene->addObject(controller);
@@ -263,6 +263,7 @@ int main(int argc, char* argv[]) {
     bool pivoting = false;
     bool changerad = false;
     std::string force_shadows = "";
+    std::string scene_path = "./samples/shadows/shadow4/shadow4.gltf";
     std::filesystem::path log_file;
     std::filesystem::path render_dir;
     std::filesystem::path campose_file;
@@ -331,6 +332,11 @@ int main(int argc, char* argv[]) {
             if (++i == args.size())
                 argsError();
             force_shadows = "_" + args[i];
+        }
+        else if (args[i] == "--scene") {
+            if (++i == args.size())
+                argsError();
+            scene_path = args[i];
         }
         else if (args[i] == "--log-file") {
             if (++i == args.size())
@@ -427,7 +433,7 @@ int main(int argc, char* argv[]) {
 
      
     Ref<Scene> scene = engine.createScene();
-    setupDemoScene(scene.get(), num_lights, force_shadows, pivoting, changerad);
+    setupDemoScene(scene_path, scene.get(), num_lights, force_shadows, pivoting, changerad);
     engine.setActiveScene(scene);
 
     if (interactive) {
